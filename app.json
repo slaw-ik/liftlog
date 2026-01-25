@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "LiftLog – Workout & Progress Log",
+    "name": "LiftLog",
     "slug": "liftlog",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,10 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.liftlog.app"
+      "bundleIdentifier": "com.liftlog-app.app"
     },
     "android": {
-      "package": "com.liftlog.app",
+      "package": "com.liftlog-app.app",
       "adaptiveIcon": {
         "backgroundColor": "#84cc16",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
