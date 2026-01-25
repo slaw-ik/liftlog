@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+web-build/
+.expo/
+
+# Native projects (generated)
+ios/
+android/
+
+# Lock files
+bun.lock
+bun.lockb
+package-lock.json
+yarn.lock
+
+# Generated files
+*.jsbundle
+*.map
+coverage/

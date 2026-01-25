@@ -1,0 +1,30 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    // Enable strict type checking for better code quality
+    "strict": true,
+
+    // Allow unused locals during development (lint will catch them)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Path aliases
+    "paths": {
+      "@/*": ["./*"],
+      "tailwind.config": ["./tailwind.config.js"]
+    },
+
+    // Modern JavaScript features
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    // JSX handling (React Native)
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"],
+  "exclude": ["node_modules", "ios", "android", "dist", "web-build"]
+}
