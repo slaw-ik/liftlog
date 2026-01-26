@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '@/components/I18nProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { deleteSet, getAllSetsWithDetails, getCategories, SetWithDetails } from '@/lib/database';
+import { calculateE1RM, getProgressValue, ProgressMetric } from '@/lib/fitness';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 64;
@@ -37,6 +38,7 @@ type ExerciseProgress = {
   exerciseName: string;
   sets: SetWithDetails[];
   maxWeight: number;
+  maxE1RM: number;
   totalSets: number;
   avgReps: number;
 };
@@ -56,6 +58,7 @@ export default function HistoryScreen() {
   const [selectedExercise, setSelectedExercise] = useState<ExerciseProgress | null>(null);
   const [chartView, setChartView] = useState<ChartView>('overview');
   const [selectedChartExercise, setSelectedChartExercise] = useState<string>('all');
+  const [progressMetric, setProgressMetric] = useState<ProgressMetric>('e1rm');
 
   // Filter states
   const [filterSection, setFilterSection] = useState<string>('all');
@@ -150,6 +153,7 @@ export default function HistoryScreen() {
   const getExerciseProgress = (exerciseName: string): ExerciseProgress => {
     const exerciseSets = allSets.filter((set) => set.exercise_name === exerciseName);
     const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
+    const maxE1RM = Math.max(...exerciseSets.map((set) => calculateE1RM(set.weight, set.reps)), 0);
     const totalSets = exerciseSets.length;
     const avgReps =
       totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
@@ -160,6 +164,7 @@ export default function HistoryScreen() {
         (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
       ),
       maxWeight,
+      maxE1RM: Math.round(maxE1RM * 10) / 10,
       totalSets,
       avgReps: Math.round(avgReps * 10) / 10,
     };
@@ -301,7 +306,7 @@ export default function HistoryScreen() {
     return last7Days;
   }, [allSets, locale, chartColors]);
 
-  // Generate exercise weight progression data
+  // Generate exercise progression data based on selected metric
   const getExerciseChartData = useMemo(() => {
     if (selectedChartExercise === 'all' || !selectedChartExercise) {
       return [];
@@ -312,12 +317,15 @@ export default function HistoryScreen() {
       .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
       .slice(-15); // Last 15 entries
 
-    return exerciseSets.map((set) => ({
-      value: set.weight,
-      label: formatShortDate(set.workout_date),
-      dataPointText: `${set.weight}`,
-    }));
-  }, [selectedChartExercise, allSets]);
+    return exerciseSets.map((set) => {
+      const value = getProgressValue(set.weight, set.reps, progressMetric);
+      return {
+        value,
+        label: formatShortDate(set.workout_date),
+        dataPointText: `${value}`,
+      };
+    });
+  }, [selectedChartExercise, allSets, progressMetric]);
 
   // Progress modal chart data
   const getProgressChartData = useMemo(() => {
@@ -325,12 +333,15 @@ export default function HistoryScreen() {
       return [];
     }
 
-    return selectedExercise.sets.slice(-15).map((set) => ({
-      value: set.weight,
-      label: formatShortDate(set.workout_date),
-      dataPointText: `${set.weight}`,
-    }));
-  }, [selectedExercise]);
+    return selectedExercise.sets.slice(-15).map((set) => {
+      const value = getProgressValue(set.weight, set.reps, progressMetric);
+      return {
+        value,
+        label: formatShortDate(set.workout_date),
+        dataPointText: `${value}`,
+      };
+    });
+  }, [selectedExercise, progressMetric]);
 
   const groupedSets = groupSetsByDate();
   const dateKeys = Object.keys(groupedSets);
@@ -475,7 +486,7 @@ export default function HistoryScreen() {
               ) : (
                 <View>
                   <Text className="mb-1 text-lg font-bold text-foreground">
-                    {t('weightProgress')}
+                    {t('exerciseProgress')}
                   </Text>
                   <Text className="mb-3 text-sm text-muted-foreground">
                     {t('selectExerciseToView')}
@@ -485,7 +496,7 @@ export default function HistoryScreen() {
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 8, marginBottom: 16 }}
+                    contentContainerStyle={{ gap: 8, marginBottom: 12 }}
                   >
                     {exercises.map((exercise) => (
                       <TouchableOpacity
@@ -509,6 +520,58 @@ export default function HistoryScreen() {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
+
+                  {/* Metric Toggle */}
+                  <View className="mb-4 flex-row gap-2">
+                    <TouchableOpacity
+                      onPress={() => setProgressMetric('e1rm')}
+                      className={`flex-1 rounded-lg border px-3 py-2 ${
+                        progressMetric === 'e1rm'
+                          ? 'border-primary bg-primary/20'
+                          : 'border-border bg-muted/30'
+                      }`}
+                    >
+                      <Text
+                        className={`text-center text-xs font-medium ${
+                          progressMetric === 'e1rm' ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {t('estimated1RM')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setProgressMetric('volume')}
+                      className={`flex-1 rounded-lg border px-3 py-2 ${
+                        progressMetric === 'volume'
+                          ? 'border-primary bg-primary/20'
+                          : 'border-border bg-muted/30'
+                      }`}
+                    >
+                      <Text
+                        className={`text-center text-xs font-medium ${
+                          progressMetric === 'volume' ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {t('volume')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setProgressMetric('weight')}
+                      className={`flex-1 rounded-lg border px-3 py-2 ${
+                        progressMetric === 'weight'
+                          ? 'border-primary bg-primary/20'
+                          : 'border-border bg-muted/30'
+                      }`}
+                    >
+                      <Text
+                        className={`text-center text-xs font-medium ${
+                          progressMetric === 'weight' ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {t('weightOnly')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Line Chart */}
                   {selectedChartExercise && getExerciseChartData.length > 0 ? (
@@ -547,7 +610,9 @@ export default function HistoryScreen() {
                         startOpacity={0.3}
                         endOpacity={0.05}
                         areaChart
-                        yAxisLabelSuffix=" kg"
+                        yAxisLabelSuffix={
+                          progressMetric === 'e1rm' ? '' : progressMetric === 'volume' ? '' : ' kg'
+                        }
                       />
                     </View>
                   ) : (
@@ -850,6 +915,14 @@ export default function HistoryScreen() {
                       {selectedExercise.maxWeight} {t('kg')}
                     </Text>
                   </View>
+                  <View className="flex-1 rounded-xl border border-border bg-card p-4">
+                    <Text className="mb-1 text-xs text-muted-foreground">{t('estimated1RM')}</Text>
+                    <Text className="text-2xl font-bold text-primary">
+                      {selectedExercise.maxE1RM} {t('kg')}
+                    </Text>
+                  </View>
+                </View>
+                <View className="mb-6 flex-row gap-3">
                   <View className="flex-1 rounded-xl border border-border bg-card p-4">
                     <Text className="mb-1 text-xs text-muted-foreground">{t('totalSets')}</Text>
                     <Text className="text-2xl font-bold text-foreground">
