@@ -4,6 +4,7 @@ import { Dumbbell, History, Home, User } from 'lucide-react-native';
 import { cssInterop, useColorScheme } from 'nativewind';
 
 import { useI18n } from '@/components/I18nProvider';
+import i18n from '@/lib/i18n';
 
 // Enable className styling for icons
 cssInterop(Home, { className: { target: 'style', nativeStyleToProp: { color: true } } });
@@ -14,10 +15,17 @@ cssInterop(User, { className: { target: 'style', nativeStyleToProp: { color: tru
 export default function TabsLayout() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { t } = useI18n();
+  const { locale } = useI18n();
+
+  // Read translations directly from i18n, using locale to trigger re-renders
+  const workoutLabel = locale ? i18n.t('workout') : i18n.t('workout');
+  const historyLabel = locale ? i18n.t('history') : i18n.t('history');
+  const sectionsLabel = locale ? i18n.t('sections') : i18n.t('sections');
+  const profileLabel = locale ? i18n.t('profile') : i18n.t('profile');
 
   return (
     <Tabs
+      key={`tabs-${locale}`}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -31,7 +39,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: t('workout'),
+          title: workoutLabel,
           tabBarIcon: ({ focused }) => (
             <Home className={focused ? 'text-primary' : 'text-muted-foreground'} size={24} />
           ),
@@ -41,7 +49,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: t('history'),
+          title: historyLabel,
           tabBarIcon: ({ focused }) => (
             <History className={focused ? 'text-primary' : 'text-muted-foreground'} size={24} />
           ),
@@ -50,7 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="sections"
         options={{
-          title: t('sections'),
+          title: sectionsLabel,
           tabBarIcon: ({ focused }) => (
             <Dumbbell className={focused ? 'text-primary' : 'text-muted-foreground'} size={24} />
           ),
@@ -59,7 +67,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: t('profile'),
+          title: profileLabel,
           tabBarIcon: ({ focused }) => (
             <User className={focused ? 'text-primary' : 'text-muted-foreground'} size={24} />
           ),
