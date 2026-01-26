@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Activity,
@@ -28,30 +27,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { deleteSet, getAllSetsWithDetails, getCategories, SetWithDetails } from '@/lib/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 64;
 
-// Types
-type WorkoutLog = {
-  id: string;
-  date: string;
-  sectionId: string;
-  sectionName: string;
-  exerciseId: string;
-  exerciseName: string;
-  weight: number;
-  reps: number;
-};
-
-type Section = {
-  id: string;
-  name: string;
-};
-
+// Types for UI
 type ExerciseProgress = {
   exerciseName: string;
-  logs: WorkoutLog[];
+  sets: SetWithDetails[];
   maxWeight: number;
   totalSets: number;
   avgReps: number;
@@ -64,9 +48,9 @@ export default function HistoryScreen() {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [logs, setLogs] = useState<WorkoutLog[]>([]);
-  const [filteredLogs, setFilteredLogs] = useState<WorkoutLog[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
+  const [allSets, setAllSets] = useState<SetWithDetails[]>([]);
+  const [filteredSets, setFilteredSets] = useState<SetWithDetails[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseProgress | null>(null);
@@ -79,7 +63,7 @@ export default function HistoryScreen() {
   const [filterDateRange, setFilterDateRange] = useState<'week' | 'month' | 'all'>('all');
 
   // Expanded log IDs
-  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
 
   // Theme colors for charts
   const chartColors = useMemo(
@@ -103,40 +87,31 @@ export default function HistoryScreen() {
 
   const loadData = async () => {
     try {
-      const logsData = await AsyncStorage.getItem('workoutLogs');
-      const sectionsData = await AsyncStorage.getItem('workout_sections');
+      const sets = await getAllSetsWithDetails();
+      const cats = await getCategories();
 
-      if (logsData) {
-        const parsedLogs = JSON.parse(logsData);
-        parsedLogs.sort(
-          (a: WorkoutLog, b: WorkoutLog) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setLogs(parsedLogs);
-        applyFiltersToLogs(parsedLogs, filterSection, filterExercise, filterDateRange);
-      }
-
-      if (sectionsData) {
-        setSections(JSON.parse(sectionsData));
-      }
+      setAllSets(sets);
+      setCategories(cats);
+      applyFiltersToSets(sets, filterSection, filterExercise, filterDateRange);
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
-  const applyFiltersToLogs = (
-    logsToFilter: WorkoutLog[],
+  const applyFiltersToSets = (
+    setsToFilter: SetWithDetails[],
     section: string,
     exercise: string,
     dateRange: 'week' | 'month' | 'all'
   ) => {
-    let filtered = [...logsToFilter];
+    let filtered = [...setsToFilter];
 
     if (section !== 'all') {
-      filtered = filtered.filter((log) => log.sectionId === section);
+      filtered = filtered.filter((set) => set.exercise_category === section);
     }
 
     if (exercise !== 'all') {
-      filtered = filtered.filter((log) => log.exerciseName === exercise);
+      filtered = filtered.filter((set) => set.exercise_name === exercise);
     }
 
     if (dateRange !== 'all') {
@@ -147,22 +122,18 @@ export default function HistoryScreen() {
       } else if (dateRange === 'month') {
         cutoffDate.setDate(now.getDate() - 30);
       }
-      filtered = filtered.filter((log) => new Date(log.date) >= cutoffDate);
+      filtered = filtered.filter((set) => new Date(set.workout_date) >= cutoffDate);
     }
 
-    setFilteredLogs(filtered);
-  };
-
-  const applyFilters = () => {
-    applyFiltersToLogs(logs, filterSection, filterExercise, filterDateRange);
+    setFilteredSets(filtered);
   };
 
   // Re-apply filters when filter state changes
   useMemo(() => {
-    if (logs.length > 0) {
-      applyFiltersToLogs(logs, filterSection, filterExercise, filterDateRange);
+    if (allSets.length > 0) {
+      applyFiltersToSets(allSets, filterSection, filterExercise, filterDateRange);
     }
-  }, [filterSection, filterExercise, filterDateRange]);
+  }, [filterSection, filterExercise, filterDateRange, allSets]);
 
   const clearFilters = () => {
     setFilterSection('all');
@@ -172,19 +143,22 @@ export default function HistoryScreen() {
 
   const getUniqueExercises = () => {
     const exercises = new Set<string>();
-    logs.forEach((log) => exercises.add(log.exerciseName));
+    allSets.forEach((set) => exercises.add(set.exercise_name));
     return Array.from(exercises).sort();
   };
 
   const getExerciseProgress = (exerciseName: string): ExerciseProgress => {
-    const exerciseLogs = logs.filter((log) => log.exerciseName === exerciseName);
-    const maxWeight = Math.max(...exerciseLogs.map((log) => log.weight));
-    const totalSets = exerciseLogs.length;
-    const avgReps = exerciseLogs.reduce((sum, log) => sum + log.reps, 0) / totalSets;
+    const exerciseSets = allSets.filter((set) => set.exercise_name === exerciseName);
+    const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
+    const totalSets = exerciseSets.length;
+    const avgReps =
+      totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
 
     return {
       exerciseName,
-      logs: exerciseLogs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      sets: exerciseSets.sort(
+        (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
+      ),
       maxWeight,
       totalSets,
       avgReps: Math.round(avgReps * 10) / 10,
@@ -198,16 +172,16 @@ export default function HistoryScreen() {
   };
 
   const exportToCSV = async () => {
-    if (filteredLogs.length === 0) {
+    if (filteredSets.length === 0) {
       Alert.alert(t('noData'), t('noLogsToExport'));
       return;
     }
 
     const headers = `${t('date')},${t('section')},${t('exercise')},${t('weight')} (kg),${t('reps')}\n`;
-    const rows = filteredLogs
+    const rows = filteredSets
       .map(
-        (log) =>
-          `${formatDate(log.date)},${log.sectionName},${log.exerciseName},${log.weight},${log.reps}`
+        (set) =>
+          `${formatDate(set.workout_date)},${set.exercise_category},${set.exercise_name},${set.weight},${set.reps}`
       )
       .join('\n');
 
@@ -223,16 +197,19 @@ export default function HistoryScreen() {
     }
   };
 
-  const deleteLog = async (logId: string) => {
+  const handleDeleteSet = async (setId: number) => {
     Alert.alert(t('deleteWorkout'), t('confirmDeleteWorkout'), [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('delete'),
         style: 'destructive',
         onPress: async () => {
-          const updatedLogs = logs.filter((log) => log.id !== logId);
-          setLogs(updatedLogs);
-          await AsyncStorage.setItem('workoutLogs', JSON.stringify(updatedLogs));
+          try {
+            await deleteSet(setId);
+            await loadData();
+          } catch (error) {
+            Alert.alert('Error', String(error));
+          }
         },
       },
     ]);
@@ -270,24 +247,24 @@ export default function HistoryScreen() {
     });
   };
 
-  const toggleLogExpansion = (logId: string) => {
+  const toggleLogExpansion = (setId: number) => {
     const newExpanded = new Set(expandedLogs);
-    if (newExpanded.has(logId)) {
-      newExpanded.delete(logId);
+    if (newExpanded.has(setId)) {
+      newExpanded.delete(setId);
     } else {
-      newExpanded.add(logId);
+      newExpanded.add(setId);
     }
     setExpandedLogs(newExpanded);
   };
 
-  const groupLogsByDate = () => {
-    const grouped: { [key: string]: WorkoutLog[] } = {};
-    filteredLogs.forEach((log) => {
-      const dateKey = new Date(log.date).toDateString();
+  const groupSetsByDate = () => {
+    const grouped: { [key: string]: SetWithDetails[] } = {};
+    filteredSets.forEach((set) => {
+      const dateKey = new Date(set.workout_date).toDateString();
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
       }
-      grouped[dateKey].push(log);
+      grouped[dateKey].push(set);
     });
     return grouped;
   };
@@ -302,7 +279,9 @@ export default function HistoryScreen() {
       date.setDate(date.getDate() - i);
       const dateStr = date.toDateString();
 
-      const daySets = logs.filter((log) => new Date(log.date).toDateString() === dateStr).length;
+      const daySets = allSets.filter(
+        (set) => new Date(set.workout_date).toDateString() === dateStr
+      ).length;
 
       const dayName = date.toLocaleDateString(locale, { weekday: 'short' });
 
@@ -320,7 +299,7 @@ export default function HistoryScreen() {
     }
 
     return last7Days;
-  }, [logs, locale, chartColors]);
+  }, [allSets, locale, chartColors]);
 
   // Generate exercise weight progression data
   const getExerciseChartData = useMemo(() => {
@@ -328,17 +307,17 @@ export default function HistoryScreen() {
       return [];
     }
 
-    const exerciseLogs = logs
-      .filter((log) => log.exerciseName === selectedChartExercise)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const exerciseSets = allSets
+      .filter((set) => set.exercise_name === selectedChartExercise)
+      .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
       .slice(-15); // Last 15 entries
 
-    return exerciseLogs.map((log, index) => ({
-      value: log.weight,
-      label: formatShortDate(log.date),
-      dataPointText: `${log.weight}`,
+    return exerciseSets.map((set) => ({
+      value: set.weight,
+      label: formatShortDate(set.workout_date),
+      dataPointText: `${set.weight}`,
     }));
-  }, [selectedChartExercise, logs]);
+  }, [selectedChartExercise, allSets]);
 
   // Progress modal chart data
   const getProgressChartData = useMemo(() => {
@@ -346,20 +325,21 @@ export default function HistoryScreen() {
       return [];
     }
 
-    return selectedExercise.logs.slice(-15).map((log) => ({
-      value: log.weight,
-      label: formatShortDate(log.date),
-      dataPointText: `${log.weight}`,
+    return selectedExercise.sets.slice(-15).map((set) => ({
+      value: set.weight,
+      label: formatShortDate(set.workout_date),
+      dataPointText: `${set.weight}`,
     }));
   }, [selectedExercise]);
 
-  const groupedLogs = groupLogsByDate();
-  const dateKeys = Object.keys(groupedLogs);
+  const groupedSets = groupSetsByDate();
+  const dateKeys = Object.keys(groupedSets);
 
   // Calculate stats
-  const totalWorkouts = filteredLogs.length;
-  const totalWeight = filteredLogs.reduce((sum, log) => sum + log.weight * log.reps, 0);
-  const uniqueDates = new Set(filteredLogs.map((log) => new Date(log.date).toDateString())).size;
+  const totalWorkouts = filteredSets.length;
+  const totalWeight = filteredSets.reduce((sum, set) => sum + set.weight * set.reps, 0);
+  const uniqueDates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString()))
+    .size;
 
   const activeFiltersCount =
     (filterSection !== 'all' ? 1 : 0) +
@@ -411,7 +391,7 @@ export default function HistoryScreen() {
         </View>
 
         {/* Charts Section */}
-        {logs.length > 0 && (
+        {allSets.length > 0 && (
           <View className="mb-4 px-6">
             {/* Chart View Toggle */}
             <View className="mb-4 flex-row gap-2">
@@ -606,7 +586,7 @@ export default function HistoryScreen() {
 
         {/* Workout History List */}
         <View className="px-6">
-          {filteredLogs.length === 0 ? (
+          {filteredSets.length === 0 ? (
             <View className="items-center py-16">
               <Calendar className="mb-4 text-muted-foreground" size={48} />
               <Text className="text-center text-xl font-bold text-foreground">
@@ -618,42 +598,42 @@ export default function HistoryScreen() {
             </View>
           ) : (
             dateKeys.map((dateKey) => {
-              const dateLogs = groupedLogs[dateKey];
-              const firstLog = dateLogs[0];
-              const displayDate = formatDate(firstLog.date);
+              const dateSets = groupedSets[dateKey];
+              const firstSet = dateSets[0];
+              const displayDate = formatDate(firstSet.workout_date);
 
               return (
                 <View key={dateKey} className="mb-6">
                   <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
 
                   <View className="gap-3">
-                    {dateLogs.map((log) => {
-                      const isExpanded = expandedLogs.has(log.id);
+                    {dateSets.map((set) => {
+                      const isExpanded = expandedLogs.has(set.id);
 
                       return (
                         <View
-                          key={log.id}
+                          key={set.id}
                           className="overflow-hidden rounded-2xl border border-border bg-card"
                         >
                           <TouchableOpacity
-                            onPress={() => toggleLogExpansion(log.id)}
+                            onPress={() => toggleLogExpansion(set.id)}
                             className="p-4"
                           >
                             <View className="flex-row items-center justify-between">
                               <View className="flex-1">
                                 <Text className="text-base font-bold text-foreground">
-                                  {log.exerciseName}
+                                  {set.exercise_name}
                                 </Text>
                                 <Text className="mt-1 text-sm text-muted-foreground">
-                                  {log.sectionName}
+                                  {set.exercise_category}
                                 </Text>
                               </View>
                               <View className="items-end">
                                 <Text className="text-lg font-bold text-primary">
-                                  {log.weight} {t('kg')} × {log.reps}
+                                  {set.weight} {t('kg')} × {set.reps}
                                 </Text>
                                 <Text className="mt-1 text-xs text-muted-foreground">
-                                  {formatTime(log.date)}
+                                  {formatTime(set.created_at)}
                                 </Text>
                               </View>
                             </View>
@@ -663,7 +643,7 @@ export default function HistoryScreen() {
                             <View className="border-t border-border px-4 pb-4 pt-3">
                               <View className="flex-row gap-3">
                                 <TouchableOpacity
-                                  onPress={() => viewExerciseProgress(log.exerciseName)}
+                                  onPress={() => viewExerciseProgress(set.exercise_name)}
                                   className="flex-1 rounded-xl bg-secondary px-4 py-3"
                                 >
                                   <Text className="text-center text-sm font-medium text-secondary-foreground">
@@ -671,7 +651,7 @@ export default function HistoryScreen() {
                                   </Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                  onPress={() => deleteLog(log.id)}
+                                  onPress={() => handleDeleteSet(set.id)}
                                   className="flex-1 rounded-xl bg-destructive px-4 py-3"
                                 >
                                   <Text className="text-center text-sm font-medium text-white">
@@ -754,24 +734,22 @@ export default function HistoryScreen() {
                       {t('allSections')}
                     </Text>
                   </TouchableOpacity>
-                  {sections.map((section) => (
+                  {categories.map((category) => (
                     <TouchableOpacity
-                      key={section.id}
-                      onPress={() => setFilterSection(section.id)}
+                      key={category}
+                      onPress={() => setFilterSection(category)}
                       className={`rounded-xl border px-4 py-3 ${
-                        filterSection === section.id
+                        filterSection === category
                           ? 'border-primary bg-primary'
                           : 'border-border bg-card'
                       }`}
                     >
                       <Text
                         className={`font-medium ${
-                          filterSection === section.id
-                            ? 'text-primary-foreground'
-                            : 'text-foreground'
+                          filterSection === category ? 'text-primary-foreground' : 'text-foreground'
                         }`}
                       >
-                        {section.name}
+                        {category}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -929,27 +907,27 @@ export default function HistoryScreen() {
                   </View>
                 )}
 
-                {/* All Logs */}
+                {/* All Sets */}
                 <Text className="mb-3 text-lg font-bold text-foreground">
                   {t('completeHistory')}
                 </Text>
                 <View className="gap-2">
-                  {selectedExercise.logs
+                  {selectedExercise.sets
                     .slice()
                     .reverse()
-                    .map((log) => (
-                      <View key={log.id} className="rounded-xl border border-border bg-card p-4">
+                    .map((set) => (
+                      <View key={set.id} className="rounded-xl border border-border bg-card p-4">
                         <View className="flex-row items-center justify-between">
                           <View>
                             <Text className="text-sm font-medium text-foreground">
-                              {formatDate(log.date)} {t('at')} {formatTime(log.date)}
+                              {formatDate(set.workout_date)} {t('at')} {formatTime(set.created_at)}
                             </Text>
                             <Text className="mt-1 text-xs text-muted-foreground">
-                              {log.sectionName}
+                              {set.exercise_category}
                             </Text>
                           </View>
                           <Text className="text-lg font-bold text-primary">
-                            {log.weight} {t('kg')} × {log.reps}
+                            {set.weight} {t('kg')} × {set.reps}
                           </Text>
                         </View>
                       </View>

@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Dimensions, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ArrowRight, Check, ChevronRight, Flame, Target, Zap } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,40 +8,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '@/components/I18nProvider';
 import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import {
+  createSet,
+  createWorkout,
+  Exercise,
+  getAllExercises,
+  getCategories,
+  getSetsByExercise,
+  getTodaySets,
+  getWeeklyStats,
+  getWorkoutsByDateRange,
+  SetWithDetails,
+} from '@/lib/database';
 
-type Exercise = { id: string; name: string };
-type Section = { id: string; name: string; exercises: Exercise[] };
-type WorkoutLog = {
+// Section type for UI grouping
+type Section = {
   id: string;
-  date: string;
-  sectionId: string;
-  sectionName: string;
-  exerciseId: string;
-  exerciseName: string;
-  weight: number;
-  reps: number;
+  name: string;
+  exercises: Exercise[];
 };
-
-const DEFAULT_SECTIONS: Section[] = [
-  {
-    id: 'pulls',
-    name: 'ТЯГИ',
-    exercises: [
-      { id: 'ex1', name: 'верхняя тяга' },
-      { id: 'ex2', name: 'узким хватом' },
-      { id: 'ex3', name: 'нижняя тяга' },
-      { id: 'ex4', name: 'гантель к поясу' },
-    ],
-  },
-  {
-    id: 'presses',
-    name: 'ЖИМЫ',
-    exercises: [
-      { id: 'ex12', name: 'жим лёжа' },
-      { id: 'ex13', name: 'наклонный жим гантелей' },
-    ],
-  },
-];
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -66,16 +50,6 @@ const getGreeting = (
   return { greeting: t('greetingNight'), emoji: '🌙', subtitle: t('greetingNightSub') };
 };
 
-// Calculate weekly stats
-const getWeeklyStats = (logs: WorkoutLog[]) => {
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const weeklyLogs = logs.filter((log) => new Date(log.date) >= weekAgo);
-  const totalVolume = weeklyLogs.reduce((acc, log) => acc + log.weight * log.reps, 0);
-  const uniqueDays = new Set(weeklyLogs.map((log) => new Date(log.date).toDateString())).size;
-  return { sets: weeklyLogs.length, volume: totalVolume, days: uniqueDays };
-};
-
 export default function WorkoutScreen() {
   const { t } = useI18n();
   const [sections, setSections] = useState<Section[]>([]);
@@ -83,12 +57,14 @@ export default function WorkoutScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
-  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
+  const [recentSets, setRecentSets] = useState<SetWithDetails[]>([]);
+  const [todaySetsData, setTodaySetsData] = useState<SetWithDetails[]>([]);
+  const [weeklyStatsData, setWeeklyStatsData] = useState({ sets: 0, volume: 0, days: 0 });
+  const [exerciseLastSets, setExerciseLastSets] = useState<Map<number, SetWithDetails>>(new Map());
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   const greetingData = useMemo(() => getGreeting(t), [t]);
-  const weeklyStats = useMemo(() => getWeeklyStats(workoutLogs), [workoutLogs]);
 
   useFocusEffect(
     useCallback(() => {
@@ -98,18 +74,38 @@ export default function WorkoutScreen() {
 
   const loadData = async () => {
     try {
-      const sectionsData = await AsyncStorage.getItem('workout_sections');
-      const logsData = await AsyncStorage.getItem('workoutLogs');
-      if (sectionsData) {
-        setSections(JSON.parse(sectionsData));
+      // Load categories and exercises from SQLite
+      const categories = await getCategories();
+      const allExercises = await getAllExercises();
+
+      // Group exercises by category into sections
+      const sectionsList: Section[] = categories.map((category) => ({
+        id: category.toLowerCase().replace(/\s+/g, '_'),
+        name: category,
+        exercises: allExercises.filter((ex) => ex.category === category),
+      }));
+      setSections(sectionsList);
+
+      // Load today's sets
+      const todaySets = await getTodaySets();
+      setTodaySetsData(todaySets);
+
+      // Load weekly stats
+      const stats = await getWeeklyStats();
+      setWeeklyStatsData(stats);
+
+      // Build recent sets list (use today's sets + we could add more)
+      setRecentSets(todaySets.slice(0, 8));
+
+      // Build last set map for each exercise
+      const lastSetsMap = new Map<number, SetWithDetails>();
+      for (const exercise of allExercises) {
+        const exerciseSets = await getSetsByExercise(exercise.id);
+        if (exerciseSets.length > 0) {
+          lastSetsMap.set(exercise.id, exerciseSets[0]); // First one is most recent
+        }
       }
-      // else {
-      //   setSections(DEFAULT_SECTIONS);
-      //   await AsyncStorage.setItem('workout_sections', JSON.stringify(DEFAULT_SECTIONS));
-      // }
-      if (logsData) {
-        setWorkoutLogs(JSON.parse(logsData));
-      }
+      setExerciseLastSets(lastSetsMap);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -120,57 +116,76 @@ export default function WorkoutScreen() {
       Alert.alert(t('error'), t('fillAllFields'));
       return;
     }
-    const newLog: WorkoutLog = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      sectionId: selectedSection.id,
-      sectionName: selectedSection.name,
-      exerciseId: selectedExercise.id,
-      exerciseName: selectedExercise.name,
-      weight: parseFloat(weight),
-      reps: parseInt(reps),
-    };
-    const updatedLogs = [newLog, ...workoutLogs];
-    setWorkoutLogs(updatedLogs);
-    await AsyncStorage.setItem('workoutLogs', JSON.stringify(updatedLogs));
 
-    // Show success animation
-    setShowSuccessAnimation(true);
-    setTimeout(() => {
-      setShowSuccessAnimation(false);
-      setSelectedSection(null);
-      setSelectedExercise(null);
-      setWeight('');
-      setReps('');
-      setShowExerciseModal(false);
-    }, 1200);
+    try {
+      // Get or create today's workout
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
+
+      const todayWorkouts = await getWorkoutsByDateRange(
+        todayStart.toISOString(),
+        todayEnd.toISOString()
+      );
+
+      let workoutId: number;
+      if (todayWorkouts.length > 0) {
+        workoutId = todayWorkouts[0].id;
+      } else {
+        workoutId = await createWorkout(new Date().toISOString());
+      }
+
+      // Create the set
+      const weightValue = parseFloat(weight);
+      const isBodyweight = weightValue === 0;
+      await createSet(
+        workoutId,
+        selectedExercise.id,
+        isBodyweight ? 1 : weightValue, // Use 1 for bodyweight exercises
+        parseInt(reps),
+        isBodyweight ? 'bodyweight' : 'weighted',
+        todaySetsData.length // set order
+      );
+
+      // Reload data
+      await loadData();
+
+      // Show success animation
+      setShowSuccessAnimation(true);
+      setTimeout(() => {
+        setShowSuccessAnimation(false);
+        setSelectedSection(null);
+        setSelectedExercise(null);
+        setWeight('');
+        setReps('');
+        setShowExerciseModal(false);
+      }, 1200);
+    } catch (error) {
+      console.error('Error saving workout:', error);
+      Alert.alert(t('error'), String(error));
+    }
   };
 
-  const getLastExerciseLog = (exerciseId: string) => {
-    return workoutLogs.find((log) => log.exerciseId === exerciseId);
-  };
-
-  const getLastExerciseStats = (exerciseId: string) => {
-    const lastLog = getLastExerciseLog(exerciseId);
-    return lastLog ? `${lastLog.weight}kg × ${lastLog.reps}` : t('noData');
+  const getLastExerciseStats = (exerciseId: number) => {
+    const lastSet = exerciseLastSets.get(exerciseId);
+    return lastSet ? `${lastSet.weight}kg × ${lastSet.reps}` : t('noData');
   };
 
   const handleExerciseSelect = (exercise: Exercise) => {
     setSelectedExercise(exercise);
 
     // Pre-fill weight and reps from last log
-    const lastLog = getLastExerciseLog(exercise.id);
-    if (lastLog) {
-      setWeight(lastLog.weight.toString());
-      setReps(lastLog.reps.toString());
+    const lastSet = exerciseLastSets.get(exercise.id);
+    if (lastSet) {
+      setWeight(lastSet.weight.toString());
+      setReps(lastSet.reps.toString());
     }
 
     setShowExerciseModal(false);
   };
 
-  const todaySets = workoutLogs.filter(
-    (log) => new Date(log.date).toDateString() === new Date().toDateString()
-  ).length;
+  const todaySets = todaySetsData.length;
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -236,11 +251,8 @@ export default function WorkoutScreen() {
                 <View className="items-end">
                   <Text className="text-xs text-primary-foreground/70">{t('todayVolume')}</Text>
                   <Text className="text-lg font-bold text-primary-foreground">
-                    {workoutLogs
-                      .filter(
-                        (log) => new Date(log.date).toDateString() === new Date().toDateString()
-                      )
-                      .reduce((acc, log) => acc + log.weight * log.reps, 0)
+                    {todaySetsData
+                      .reduce((acc, set) => acc + set.weight * set.reps, 0)
                       .toLocaleString()}{' '}
                     kg
                   </Text>
@@ -258,7 +270,7 @@ export default function WorkoutScreen() {
                   {t('thisWeek')}
                 </Text>
               </View>
-              <Text className="text-3xl font-bold text-foreground">{weeklyStats.days}</Text>
+              <Text className="text-3xl font-bold text-foreground">{weeklyStatsData.days}</Text>
               <Text className="text-sm text-muted-foreground">{t('activeDays')}</Text>
             </View>
 
@@ -269,7 +281,7 @@ export default function WorkoutScreen() {
                   {t('thisWeek')}
                 </Text>
               </View>
-              <Text className="text-3xl font-bold text-foreground">{weeklyStats.sets}</Text>
+              <Text className="text-3xl font-bold text-foreground">{weeklyStatsData.sets}</Text>
               <Text className="text-sm text-muted-foreground">{t('totalSets')}</Text>
             </View>
 
@@ -281,9 +293,9 @@ export default function WorkoutScreen() {
                 </Text>
               </View>
               <Text className="text-2xl font-bold text-foreground">
-                {weeklyStats.volume >= 1000
-                  ? `${(weeklyStats.volume / 1000).toFixed(1)}k`
-                  : weeklyStats.volume}
+                {weeklyStatsData.volume >= 1000
+                  ? `${(weeklyStatsData.volume / 1000).toFixed(1)}k`
+                  : weeklyStatsData.volume}
               </Text>
               <Text className="text-sm text-muted-foreground">kg</Text>
             </View>
@@ -356,12 +368,12 @@ export default function WorkoutScreen() {
         </View>
 
         {/* Recent Sets - Horizontal Scroll */}
-        {workoutLogs.length > 0 && (
+        {recentSets.length > 0 && (
           <View className="mb-6">
             <View className="mb-4 flex-row items-center justify-between px-6">
               <Text className="text-xl font-bold text-foreground">{t('recentSets')}</Text>
               <Text className="text-sm text-muted-foreground">
-                {workoutLogs.length} {t('total')}
+                {recentSets.length} {t('total')}
               </Text>
             </View>
             <ScrollView
@@ -371,11 +383,12 @@ export default function WorkoutScreen() {
               alwaysBounceVertical={false}
               contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
             >
-              {workoutLogs.slice(0, 8).map((log, index) => {
-                const isToday = new Date(log.date).toDateString() === new Date().toDateString();
+              {recentSets.slice(0, 8).map((set) => {
+                const isToday =
+                  new Date(set.workout_date).toDateString() === new Date().toDateString();
                 return (
                   <View
-                    key={log.id}
+                    key={set.id}
                     className={`rounded-2xl p-4 ${isToday ? 'border-2 border-primary/30 bg-primary/10' : 'border border-border bg-card'}`}
                     style={{ width: SCREEN_WIDTH * 0.42 }}
                   >
@@ -387,20 +400,20 @@ export default function WorkoutScreen() {
                       </View>
                     )}
                     <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
-                      {log.exerciseName}
+                      {set.exercise_name}
                     </Text>
                     <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
-                      {log.sectionName}
+                      {set.exercise_category}
                     </Text>
                     <View className="mt-3 flex-row items-baseline">
-                      <Text className="text-2xl font-bold text-foreground">{log.weight}</Text>
+                      <Text className="text-2xl font-bold text-foreground">{set.weight}</Text>
                       <Text className="ml-1 text-sm text-muted-foreground">kg</Text>
                       <Text className="mx-2 text-muted-foreground">×</Text>
-                      <Text className="text-2xl font-bold text-foreground">{log.reps}</Text>
+                      <Text className="text-2xl font-bold text-foreground">{set.reps}</Text>
                     </View>
                     {!isToday && (
                       <Text className="mt-2 text-2xs text-muted-foreground">
-                        {new Date(log.date).toLocaleDateString()}
+                        {new Date(set.workout_date).toLocaleDateString()}
                       </Text>
                     )}
                   </View>
@@ -411,7 +424,7 @@ export default function WorkoutScreen() {
         )}
 
         {/* Empty State */}
-        {workoutLogs.length === 0 && (
+        {recentSets.length === 0 && (
           <View className="items-center px-6 py-12">
             <View className="mb-4 rounded-full bg-muted p-6">
               <Flame className="text-muted-foreground" size={32} />

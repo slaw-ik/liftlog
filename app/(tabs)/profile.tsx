@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Bell,
   Database,
+  Download,
   Edit,
   FileText,
   LogOut,
@@ -22,6 +23,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n } from '@/components/I18nProvider';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { clearAllData } from '@/lib/database';
+import { getImportPreview, importTrainingsToDatabase } from '@/lib/importTrainings';
 
 type UserProfile = {
   name: string;
@@ -101,12 +104,55 @@ export default function ProfileScreen() {
         text: t('delete'),
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('workoutLogs');
-          await AsyncStorage.removeItem('sections');
-          Alert.alert(t('clearDataSuccess'));
+          try {
+            await clearAllData();
+            // Also clear any remaining AsyncStorage caches
+            await AsyncStorage.removeItem('workoutLogs');
+            await AsyncStorage.removeItem('workout_sections');
+            Alert.alert(t('clearDataSuccess'));
+          } catch (error) {
+            Alert.alert('Error', String(error));
+          }
         },
       },
     ]);
+  };
+
+  const handleImportTrainings = () => {
+    try {
+      const preview = getImportPreview();
+      Alert.alert(
+        'Import Training Data',
+        `This will import:\n\n` +
+          `• ${preview.totalSessions} workout sessions\n` +
+          `• ${preview.totalSets} total sets\n` +
+          `• ${preview.uniqueExercises} unique exercises\n` +
+          `• Date range: ${preview.dateRange.from} - ${preview.dateRange.to}\n\n` +
+          `This will REPLACE your current workout data.`,
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: 'Import',
+            onPress: async () => {
+              try {
+                const result = await importTrainingsToDatabase(true);
+                Alert.alert(
+                  'Import Complete!',
+                  `Successfully imported:\n` +
+                    `• ${result.workoutsCreated} workout sessions\n` +
+                    `• ${result.setsCreated} sets\n` +
+                    `• ${result.exercisesCreated} exercises`
+                );
+              } catch (error) {
+                Alert.alert('Import Failed', String(error));
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Preview Failed', String(error));
+    }
   };
 
   const navigateToLogin = () => {
@@ -180,6 +226,17 @@ export default function ProfileScreen() {
               </View>
 
               <LanguageSelector />
+
+              <TouchableOpacity
+                onPress={handleImportTrainings}
+                className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4"
+              >
+                <View className="flex-row items-center gap-3">
+                  <Download className="text-primary" size={20} />
+                  <Text className="text-foreground">Import Training Data</Text>
+                </View>
+                <Text className="text-sm text-primary">39 sessions</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleClearAllData}
@@ -272,6 +329,17 @@ export default function ProfileScreen() {
           <Text className="mb-4 text-lg font-semibold text-foreground">{t('dataManagement')}</Text>
 
           <View className="mb-4 gap-2 overflow-hidden rounded-xl border border-border bg-card p-2">
+            <TouchableOpacity
+              onPress={handleImportTrainings}
+              className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4"
+            >
+              <View className="flex-row items-center gap-3">
+                <Download className="text-primary" size={20} />
+                <Text className="text-foreground">Import Training Data</Text>
+              </View>
+              <Text className="text-sm text-primary">39 sessions</Text>
+            </TouchableOpacity>
+
             <View className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4 opacity-50">
               <View className="flex-row items-center gap-3">
                 <FileText className="text-foreground" size={20} />

@@ -99,6 +99,9 @@ const translations = {
       deleteExerciseConfirm: 'Are you sure you want to delete this exercise?',
       failedToSave: 'Failed to save',
       sectionNameEmpty: 'Section name cannot be empty',
+      addDefaultCategories: 'Add Default Categories',
+      defaultsAdded: 'Defaults Added',
+      exercisesAdded: 'exercises added',
       exerciseNameEmpty: 'Exercise name cannot be empty',
     },
 
@@ -371,6 +374,9 @@ const translations = {
       deleteExerciseConfirm: 'Вы уверены, что хотите удалить это упражнение?',
       failedToSave: 'Не удалось сохранить',
       sectionNameEmpty: 'Название раздела не может быть пустым',
+      addDefaultCategories: 'Добавить стандартные категории',
+      defaultsAdded: 'Категории добавлены',
+      exercisesAdded: 'упражнений добавлено',
       exerciseNameEmpty: 'Название упражнения не может быть пустым',
     },
 
@@ -645,6 +651,9 @@ const translations = {
       deleteExerciseConfirm: 'Ви впевнені, що хочете видалити цю вправу?',
       failedToSave: 'Не вдалося зберегти',
       sectionNameEmpty: 'Назва розділу не може бути порожньою',
+      addDefaultCategories: 'Додати стандартні категорії',
+      defaultsAdded: 'Категорії додано',
+      exercisesAdded: 'вправ додано',
       exerciseNameEmpty: 'Назва вправи не може бути порожньою',
     },
 

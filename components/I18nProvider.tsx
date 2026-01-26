@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 
@@ -27,7 +28,7 @@ type I18nProviderProps = {
 
 export function I18nProvider({ children }: I18nProviderProps) {
   const [locale, setLocaleState] = useState(getCurrentLanguage());
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -43,19 +44,26 @@ export function I18nProvider({ children }: I18nProviderProps) {
     setLocaleState(newLocale);
   }, []);
 
-  // Translation function that depends on locale state to trigger re-renders
-  const t = useCallback(
-    (key: string, options?: object) => {
+  // Translation function - recreated when locale changes
+  // Using useMemo to ensure the function identity changes when locale changes
+  const t = useMemo(() => {
+    // This closure captures the current locale to force consumers to re-render
+    return (key: string, options?: object) => {
+      // Access locale to establish dependency (even though i18n.t uses i18n.locale internally)
+      void locale;
       return i18n.t(key, options);
-    },
-    [locale]
-  );
+    };
+  }, [locale]);
 
-  const value = {
-    locale,
-    setLocale,
-    t,
-  };
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo(
+    () => ({
+      locale,
+      setLocale,
+      t,
+    }),
+    [locale, setLocale, t]
+  );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
