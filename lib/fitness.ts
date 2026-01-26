@@ -52,18 +52,3 @@ export function getProgressValue(weight: number, reps: number, metric: ProgressM
       return weight;
   }
 }
-
-/**
- * Get the label suffix for the metric (for Y-axis)
- */
-export function getMetricSuffix(metric: ProgressMetric): string {
-  switch (metric) {
-    case 'e1rm':
-      return ' kg (e1RM)';
-    case 'volume':
-      return ' kg×reps';
-    case 'weight':
-    default:
-      return ' kg';
-  }
-}

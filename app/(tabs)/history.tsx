@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Modal,
@@ -45,6 +46,62 @@ type ExerciseProgress = {
 
 type ChartView = 'overview' | 'exercise';
 
+// Memoized set item to prevent re-renders
+const SetItem = memo(function SetItem({
+  set,
+  isExpanded,
+  onToggle,
+  onViewProgress,
+  onDelete,
+  t,
+  formatTime,
+}: {
+  set: SetWithDetails;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onViewProgress: () => void;
+  onDelete: () => void;
+  t: (key: string) => string;
+  formatTime: (date: string) => string;
+}) {
+  return (
+    <View className="overflow-hidden rounded-2xl border border-border bg-card">
+      <TouchableOpacity onPress={onToggle} className="p-4">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-base font-bold text-foreground">{set.exercise_name}</Text>
+            <Text className="mt-1 text-sm text-muted-foreground">{set.exercise_category}</Text>
+          </View>
+          <View className="items-end">
+            <Text className="text-lg font-bold text-primary">
+              {set.weight} {t('kg')} × {set.reps}
+            </Text>
+            <Text className="mt-1 text-xs text-muted-foreground">{formatTime(set.created_at)}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View className="border-t border-border px-4 pb-4 pt-3">
+          <View className="flex-row gap-3">
+            <TouchableOpacity
+              onPress={onViewProgress}
+              className="flex-1 rounded-xl bg-secondary px-4 py-3"
+            >
+              <Text className="text-center text-sm font-medium text-secondary-foreground">
+                {t('viewProgress')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onDelete} className="flex-1 rounded-xl bg-destructive px-4 py-3">
+              <Text className="text-center text-sm font-medium text-white">{t('delete')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+});
+
 export default function HistoryScreen() {
   const { t, locale } = useI18n();
   const { colorScheme } = useColorScheme();
@@ -68,6 +125,10 @@ export default function HistoryScreen() {
   // Expanded log IDs
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
 
+  // Loading state - only show on first load
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
   // Theme colors for charts
   const chartColors = useMemo(
     () => ({
@@ -82,24 +143,29 @@ export default function HistoryScreen() {
     [isDark]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      const sets = await getAllSetsWithDetails();
-      const cats = await getCategories();
+      // Run queries in parallel - limit to last 500 sets for performance
+      const [sets, cats] = await Promise.all([getAllSetsWithDetails(500), getCategories()]);
 
       setAllSets(sets);
       setCategories(cats);
       applyFiltersToSets(sets, filterSection, filterExercise, filterDateRange);
+      setHasLoaded(true);
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [filterSection, filterExercise, filterDateRange]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLoaded) {
+        loadData();
+      }
+    }, [hasLoaded, loadData])
+  );
 
   const applyFiltersToSets = (
     setsToFilter: SetWithDetails[],
@@ -144,11 +210,11 @@ export default function HistoryScreen() {
     setFilterDateRange('all');
   };
 
-  const getUniqueExercises = () => {
-    const exercises = new Set<string>();
-    allSets.forEach((set) => exercises.add(set.exercise_name));
-    return Array.from(exercises).sort();
-  };
+  const exercises = useMemo(() => {
+    const exerciseSet = new Set<string>();
+    allSets.forEach((set) => exerciseSet.add(set.exercise_name));
+    return Array.from(exerciseSet).sort();
+  }, [allSets]);
 
   const getExerciseProgress = (exerciseName: string): ExerciseProgress => {
     const exerciseSets = allSets.filter((set) => set.exercise_name === exerciseName);
@@ -170,11 +236,14 @@ export default function HistoryScreen() {
     };
   };
 
-  const viewExerciseProgress = (exerciseName: string) => {
-    const progress = getExerciseProgress(exerciseName);
-    setSelectedExercise(progress);
-    setShowProgressModal(true);
-  };
+  const viewExerciseProgress = useCallback(
+    (exerciseName: string) => {
+      const progress = getExerciseProgress(exerciseName);
+      setSelectedExercise(progress);
+      setShowProgressModal(true);
+    },
+    [allSets]
+  );
 
   const exportToCSV = async () => {
     if (filteredSets.length === 0) {
@@ -202,23 +271,27 @@ export default function HistoryScreen() {
     }
   };
 
-  const handleDeleteSet = async (setId: number) => {
-    Alert.alert(t('deleteWorkout'), t('confirmDeleteWorkout'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteSet(setId);
-            await loadData();
-          } catch (error) {
-            Alert.alert('Error', String(error));
-          }
+  const handleDeleteSet = useCallback(
+    (setId: number) => {
+      Alert.alert(t('deleteWorkout'), t('confirmDeleteWorkout'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteSet(setId);
+              setHasLoaded(false);
+              await loadData();
+            } catch (error) {
+              Alert.alert('Error', String(error));
+            }
+          },
         },
-      },
-    ]);
-  };
+      ]);
+    },
+    [t, loadData]
+  );
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -244,25 +317,30 @@ export default function HistoryScreen() {
     return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
+  const formatTime = useCallback(
+    (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    },
+    [locale]
+  );
+
+  const toggleLogExpansion = useCallback((setId: number) => {
+    setExpandedLogs((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(setId)) {
+        newExpanded.delete(setId);
+      } else {
+        newExpanded.add(setId);
+      }
+      return newExpanded;
     });
-  };
+  }, []);
 
-  const toggleLogExpansion = (setId: number) => {
-    const newExpanded = new Set(expandedLogs);
-    if (newExpanded.has(setId)) {
-      newExpanded.delete(setId);
-    } else {
-      newExpanded.add(setId);
-    }
-    setExpandedLogs(newExpanded);
-  };
-
-  const groupSetsByDate = () => {
+  const groupedSets = useMemo(() => {
     const grouped: { [key: string]: SetWithDetails[] } = {};
     filteredSets.forEach((set) => {
       const dateKey = new Date(set.workout_date).toDateString();
@@ -272,7 +350,7 @@ export default function HistoryScreen() {
       grouped[dateKey].push(set);
     });
     return grouped;
-  };
+  }, [filteredSets]);
 
   // Generate weekly activity data for bar chart
   const getWeeklyActivityData = useMemo(() => {
@@ -315,14 +393,14 @@ export default function HistoryScreen() {
     const exerciseSets = allSets
       .filter((set) => set.exercise_name === selectedChartExercise)
       .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
-      .slice(-15); // Last 15 entries
+      .slice(-15);
 
     return exerciseSets.map((set) => {
       const value = getProgressValue(set.weight, set.reps, progressMetric);
       return {
         value,
         label: formatShortDate(set.workout_date),
-        dataPointText: `${value}`,
+        dataPointText: `${Math.round(value)}`,
       };
     });
   }, [selectedChartExercise, allSets, progressMetric]);
@@ -343,21 +421,41 @@ export default function HistoryScreen() {
     });
   }, [selectedExercise, progressMetric]);
 
-  const groupedSets = groupSetsByDate();
-  const dateKeys = Object.keys(groupedSets);
+  const dateKeys = useMemo(() => Object.keys(groupedSets), [groupedSets]);
 
-  // Calculate stats
-  const totalWorkouts = filteredSets.length;
-  const totalWeight = filteredSets.reduce((sum, set) => sum + set.weight * set.reps, 0);
-  const uniqueDates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString()))
-    .size;
+  // Calculate stats - memoized
+  const { totalWorkouts, totalWeight, uniqueDates } = useMemo(() => {
+    const total = filteredSets.length;
+    const weight = filteredSets.reduce((sum, set) => sum + set.weight * set.reps, 0);
+    const dates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString())).size;
+    return { totalWorkouts: total, totalWeight: weight, uniqueDates: dates };
+  }, [filteredSets]);
 
-  const activeFiltersCount =
-    (filterSection !== 'all' ? 1 : 0) +
-    (filterExercise !== 'all' ? 1 : 0) +
-    (filterDateRange !== 'all' ? 1 : 0);
+  const activeFiltersCount = useMemo(
+    () =>
+      (filterSection !== 'all' ? 1 : 0) +
+      (filterExercise !== 'all' ? 1 : 0) +
+      (filterDateRange !== 'all' ? 1 : 0),
+    [filterSection, filterExercise, filterDateRange]
+  );
 
-  const exercises = getUniqueExercises();
+  // Show loading indicator on initial load
+  if (isLoading) {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-row items-center justify-between border-b border-border px-6 py-4">
+          <View>
+            <Text className="text-2xl font-bold text-foreground">{t('workoutHistory')}</Text>
+            <Text className="text-sm text-muted-foreground">{t('loading')}...</Text>
+          </View>
+          <ThemeToggle />
+        </View>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={chartColors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -405,47 +503,43 @@ export default function HistoryScreen() {
         {allSets.length > 0 && (
           <View className="mb-4 px-6">
             {/* Chart View Toggle */}
-            <View className="mb-4 flex-row gap-2">
-              <TouchableOpacity
-                onPress={() => setChartView('overview')}
-                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3 ${
-                  chartView === 'overview' ? 'border-primary bg-primary' : 'border-border bg-card'
-                }`}
-              >
-                <BarChart3
-                  size={16}
-                  color={
-                    chartView === 'overview' ? (isDark ? '#0A0A0A' : '#0F0F0F') : chartColors.text
-                  }
-                />
-                <Text
-                  className={`font-medium ${
-                    chartView === 'overview' ? 'text-primary-foreground' : 'text-foreground'
-                  }`}
-                >
-                  {t('weeklyActivity')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setChartView('exercise')}
-                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl border px-4 py-3 ${
-                  chartView === 'exercise' ? 'border-primary bg-primary' : 'border-border bg-card'
-                }`}
-              >
-                <LineChart
-                  size={16}
-                  color={
-                    chartView === 'exercise' ? (isDark ? '#0A0A0A' : '#0F0F0F') : chartColors.text
-                  }
-                />
-                <Text
-                  className={`font-medium ${
-                    chartView === 'exercise' ? 'text-primary-foreground' : 'text-foreground'
-                  }`}
-                >
-                  {t('progress')}
-                </Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {(['overview', 'exercise'] as const).map((view) => {
+                const isSelected = chartView === view;
+                const Icon = view === 'overview' ? BarChart3 : LineChart;
+                const label = view === 'overview' ? t('weeklyActivity') : t('progress');
+                return (
+                  <TouchableOpacity
+                    key={`${view}-${isSelected}`}
+                    onPress={() => setChartView(view)}
+                    activeOpacity={0.7}
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: isSelected ? chartColors.primary : chartColors.card,
+                      borderColor: isSelected ? chartColors.primary : chartColors.grid,
+                      borderWidth: 1.5,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                    }}
+                  >
+                    <Icon size={16} color={isSelected ? '#0f0f0f' : chartColors.text} />
+                    <Text
+                      style={{
+                        color: isSelected ? '#0f0f0f' : chartColors.text,
+                        fontSize: 14,
+                        fontWeight: '500',
+                      }}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* Chart Content */}
@@ -479,7 +573,7 @@ export default function HistoryScreen() {
                       }}
                       hideRules={false}
                       barBorderRadius={6}
-                      isAnimated
+                      isAnimated={false}
                     />
                   </View>
                 </View>
@@ -496,81 +590,75 @@ export default function HistoryScreen() {
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 8, marginBottom: 12 }}
+                    contentContainerStyle={{ gap: 6, marginBottom: 10 }}
                   >
-                    {exercises.map((exercise) => (
-                      <TouchableOpacity
-                        key={exercise}
-                        onPress={() => setSelectedChartExercise(exercise)}
-                        className={`rounded-full border px-4 py-2 ${
-                          selectedChartExercise === exercise
-                            ? 'border-primary bg-primary'
-                            : 'border-border bg-secondary'
-                        }`}
-                      >
-                        <Text
-                          className={`text-sm font-medium ${
-                            selectedChartExercise === exercise
-                              ? 'text-primary-foreground'
-                              : 'text-foreground'
-                          }`}
+                    {exercises.map((exercise) => {
+                      const isSelected = selectedChartExercise === exercise;
+                      return (
+                        <TouchableOpacity
+                          key={`${exercise}-${isSelected}`}
+                          onPress={() => setSelectedChartExercise(exercise)}
+                          activeOpacity={0.7}
+                          style={{
+                            backgroundColor: isSelected ? chartColors.primary : chartColors.card,
+                            borderColor: isSelected ? chartColors.primary : chartColors.grid,
+                            borderWidth: 1.5,
+                            borderRadius: 9999,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                          }}
                         >
-                          {exercise}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            style={{
+                              color: isSelected ? '#0f0f0f' : chartColors.text,
+                              fontSize: 12,
+                              fontWeight: '500',
+                            }}
+                          >
+                            {exercise}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
 
                   {/* Metric Toggle */}
-                  <View className="mb-4 flex-row gap-2">
-                    <TouchableOpacity
-                      onPress={() => setProgressMetric('e1rm')}
-                      className={`flex-1 rounded-lg border px-3 py-2 ${
-                        progressMetric === 'e1rm'
-                          ? 'border-primary bg-primary/20'
-                          : 'border-border bg-muted/30'
-                      }`}
-                    >
-                      <Text
-                        className={`text-center text-xs font-medium ${
-                          progressMetric === 'e1rm' ? 'text-primary' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {t('estimated1RM')}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setProgressMetric('volume')}
-                      className={`flex-1 rounded-lg border px-3 py-2 ${
-                        progressMetric === 'volume'
-                          ? 'border-primary bg-primary/20'
-                          : 'border-border bg-muted/30'
-                      }`}
-                    >
-                      <Text
-                        className={`text-center text-xs font-medium ${
-                          progressMetric === 'volume' ? 'text-primary' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {t('volume')}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => setProgressMetric('weight')}
-                      className={`flex-1 rounded-lg border px-3 py-2 ${
-                        progressMetric === 'weight'
-                          ? 'border-primary bg-primary/20'
-                          : 'border-border bg-muted/30'
-                      }`}
-                    >
-                      <Text
-                        className={`text-center text-xs font-medium ${
-                          progressMetric === 'weight' ? 'text-primary' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {t('weightOnly')}
-                      </Text>
-                    </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+                    {(['e1rm', 'volume', 'weight'] as const).map((metric) => {
+                      const isSelected = progressMetric === metric;
+                      const labels = {
+                        e1rm: t('estimated1RM'),
+                        volume: t('volume'),
+                        weight: t('weightOnly'),
+                      };
+                      return (
+                        <TouchableOpacity
+                          key={`${metric}-${isSelected}`}
+                          onPress={() => setProgressMetric(metric)}
+                          activeOpacity={0.7}
+                          style={{
+                            flex: 1,
+                            backgroundColor: isSelected ? chartColors.primary : chartColors.card,
+                            borderColor: isSelected ? chartColors.primary : chartColors.grid,
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected ? '#0f0f0f' : chartColors.text,
+                              fontSize: 11,
+                              fontWeight: '600',
+                              textAlign: 'center',
+                            }}
+                          >
+                            {labels[metric]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
 
                   {/* Line Chart */}
@@ -581,10 +669,10 @@ export default function HistoryScreen() {
                         width={CHART_WIDTH - 20}
                         height={180}
                         spacing={40}
-                        thickness={3}
+                        thickness={2}
                         color={chartColors.primary}
                         dataPointsColor={chartColors.primary}
-                        dataPointsRadius={5}
+                        dataPointsRadius={4}
                         noOfSections={4}
                         yAxisThickness={0}
                         xAxisThickness={1}
@@ -603,16 +691,12 @@ export default function HistoryScreen() {
                         }}
                         hideDataPoints={false}
                         curved
-                        isAnimated
-                        animationDuration={800}
+                        isAnimated={false}
+                        areaChart
                         startFillColor={chartColors.primary}
                         endFillColor={chartColors.background}
-                        startOpacity={0.3}
-                        endOpacity={0.05}
-                        areaChart
-                        yAxisLabelSuffix={
-                          progressMetric === 'e1rm' ? '' : progressMetric === 'volume' ? '' : ' kg'
-                        }
+                        startOpacity={0.2}
+                        endOpacity={0.02}
                       />
                     </View>
                   ) : (
@@ -672,63 +756,18 @@ export default function HistoryScreen() {
                   <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
 
                   <View className="gap-3">
-                    {dateSets.map((set) => {
-                      const isExpanded = expandedLogs.has(set.id);
-
-                      return (
-                        <View
-                          key={set.id}
-                          className="overflow-hidden rounded-2xl border border-border bg-card"
-                        >
-                          <TouchableOpacity
-                            onPress={() => toggleLogExpansion(set.id)}
-                            className="p-4"
-                          >
-                            <View className="flex-row items-center justify-between">
-                              <View className="flex-1">
-                                <Text className="text-base font-bold text-foreground">
-                                  {set.exercise_name}
-                                </Text>
-                                <Text className="mt-1 text-sm text-muted-foreground">
-                                  {set.exercise_category}
-                                </Text>
-                              </View>
-                              <View className="items-end">
-                                <Text className="text-lg font-bold text-primary">
-                                  {set.weight} {t('kg')} × {set.reps}
-                                </Text>
-                                <Text className="mt-1 text-xs text-muted-foreground">
-                                  {formatTime(set.created_at)}
-                                </Text>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-
-                          {isExpanded && (
-                            <View className="border-t border-border px-4 pb-4 pt-3">
-                              <View className="flex-row gap-3">
-                                <TouchableOpacity
-                                  onPress={() => viewExerciseProgress(set.exercise_name)}
-                                  className="flex-1 rounded-xl bg-secondary px-4 py-3"
-                                >
-                                  <Text className="text-center text-sm font-medium text-secondary-foreground">
-                                    {t('viewProgress')}
-                                  </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => handleDeleteSet(set.id)}
-                                  className="flex-1 rounded-xl bg-destructive px-4 py-3"
-                                >
-                                  <Text className="text-center text-sm font-medium text-white">
-                                    {t('delete')}
-                                  </Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
+                    {dateSets.map((set) => (
+                      <SetItem
+                        key={set.id}
+                        set={set}
+                        isExpanded={expandedLogs.has(set.id)}
+                        onToggle={() => toggleLogExpansion(set.id)}
+                        onViewProgress={() => viewExerciseProgress(set.exercise_name)}
+                        onDelete={() => handleDeleteSet(set.id)}
+                        t={t}
+                        formatTime={formatTime}
+                      />
+                    ))}
                   </View>
                 </View>
               );
@@ -969,11 +1008,11 @@ export default function HistoryScreen() {
                           fontSize: 10,
                         }}
                         curved
-                        isAnimated
+                        isAnimated={false}
                         startFillColor={chartColors.primary}
                         endFillColor={chartColors.background}
-                        startOpacity={0.3}
-                        endOpacity={0.05}
+                        startOpacity={0.2}
+                        endOpacity={0.02}
                         areaChart
                       />
                     </View>
