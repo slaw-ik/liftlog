@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
@@ -8,58 +8,27 @@ import {
   Bell,
   Database,
   Download,
-  Edit,
   FileText,
   LogOut,
-  Save,
   Settings,
   Shield,
   Trash2,
   User,
-  X,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/components/AuthProvider';
+import { GoogleLogo } from '@/components/GoogleLogo';
 import { useI18n } from '@/components/I18nProvider';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { clearAllData } from '@/lib/database';
 import { getImportPreview, importTrainingsToDatabase } from '@/lib/importTrainings';
 
-type UserProfile = {
-  name: string;
-  email: string;
-  joinedDate: string;
-};
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      const authData = await AsyncStorage.getItem('userAuth');
-      if (authData) {
-        const user = JSON.parse(authData);
-        setUserProfile(user);
-        setIsLoggedIn(true);
-      }
-    } catch (error) {
-      console.error('Error checking auth:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { user, isLoading, signOut, signInWithGoogle, isSigningIn } = useAuth();
 
   const handleLogout = () => {
     Alert.alert(t('logout'), t('logoutConfirm'), [
@@ -68,32 +37,17 @@ export default function ProfileScreen() {
         text: t('logout'),
         style: 'destructive',
         onPress: async () => {
-          await AsyncStorage.removeItem('userAuth');
-          setIsLoggedIn(false);
-          setUserProfile(null);
+          await signOut();
         },
       },
     ]);
   };
 
-  const handleEditProfile = () => {
-    if (userProfile) {
-      setEditName(userProfile.name);
-      setEditModalVisible(true);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editName.trim()) {
-      Alert.alert(t('fillAllFields'));
-      return;
-    }
-
-    if (userProfile) {
-      const updatedProfile = { ...userProfile, name: editName.trim() };
-      await AsyncStorage.setItem('userAuth', JSON.stringify(updatedProfile));
-      setUserProfile(updatedProfile);
-      setEditModalVisible(false);
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      Alert.alert(t('error'), t('googleSignInError') || 'Failed to sign in with Google');
     }
   };
 
@@ -163,7 +117,7 @@ export default function ProfileScreen() {
     router.push('/signup');
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-background">
         <Text className="text-foreground">{t('loading')}</Text>
@@ -172,7 +126,7 @@ export default function ProfileScreen() {
   }
 
   // Not logged in state
-  if (!isLoggedIn) {
+  if (!user) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <ScrollView contentContainerStyle={{ paddingBottom: 128 }}>
@@ -191,6 +145,26 @@ export default function ProfileScreen() {
 
               <Text className="mb-2 text-2xl font-bold text-foreground">{t('welcome')}</Text>
               <Text className="mb-8 text-center text-muted-foreground">{t('guestMessage')}</Text>
+
+              {/* Google Sign-In Button */}
+              <TouchableOpacity
+                onPress={handleGoogleSignIn}
+                disabled={isSigningIn}
+                className={`mb-3 w-full flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn ? 'opacity-50' : ''}`}
+                style={{ elevation: 1 }}
+              >
+                <GoogleLogo size={20} />
+                <Text className="text-base font-medium text-gray-700">
+                  {isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Divider */}
+              <View className="my-3 flex-row items-center">
+                <View className="h-px flex-1 bg-border" />
+                <Text className="mx-4 text-sm text-muted-foreground">{t('or') || 'or'}</Text>
+                <View className="h-px flex-1 bg-border" />
+              </View>
 
               <TouchableOpacity
                 onPress={navigateToLogin}
@@ -267,27 +241,28 @@ export default function ProfileScreen() {
         {/* Profile Card */}
         <View className="mt-4 px-6">
           <View className="rounded-xl border border-border bg-card p-6">
-            <View className="mb-6 items-center">
-              <View className="mb-4 h-24 w-24 items-center justify-center rounded-full bg-primary">
-                <Text className="text-3xl font-bold text-primary-foreground">
-                  {userProfile?.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+            <View className="items-center">
+              {user.photoURL ? (
+                <Image source={{ uri: user.photoURL }} className="mb-4 h-24 w-24 rounded-full" />
+              ) : (
+                <View className="mb-4 h-24 w-24 items-center justify-center rounded-full bg-primary">
+                  <Text className="text-3xl font-bold text-primary-foreground">
+                    {user.displayName?.charAt(0).toUpperCase() ||
+                      user.email?.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
 
-              <Text className="mb-1 text-2xl font-bold text-foreground">{userProfile?.name}</Text>
-              <Text className="mb-1 text-muted-foreground">{userProfile?.email}</Text>
-              <Text className="text-sm text-muted-foreground">
-                {t('memberSince')} {new Date(userProfile?.joinedDate || '').toLocaleDateString()}
+              <Text className="mb-1 text-2xl font-bold text-foreground">
+                {user.displayName || t('user') || 'User'}
               </Text>
+              <Text className="mb-1 text-muted-foreground">{user.email}</Text>
+              {user.metadata.creationTime && (
+                <Text className="text-sm text-muted-foreground">
+                  {t('memberSince')} {new Date(user.metadata.creationTime).toLocaleDateString()}
+                </Text>
+              )}
             </View>
-
-            <TouchableOpacity
-              onPress={handleEditProfile}
-              className="flex-row items-center justify-center gap-2 rounded-xl bg-secondary py-3"
-            >
-              <Edit className="text-secondary-foreground" size={18} />
-              <Text className="font-semibold text-secondary-foreground">{t('editProfile')}</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -384,57 +359,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View className="flex-1 items-center justify-center bg-black/50 p-6">
-          <View className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
-            <View className="mb-6 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-foreground">{t('editProfile')}</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <X className="text-foreground" size={24} />
-              </TouchableOpacity>
-            </View>
-
-            <View className="mb-6">
-              <Text className="mb-2 text-sm font-medium text-foreground">{t('yourName')}</Text>
-              <TextInput
-                value={editName}
-                onChangeText={setEditName}
-                placeholder={t('yourName')}
-                className="rounded-xl bg-muted px-4 py-3 text-foreground"
-                placeholderTextColor="#999"
-              />
-            </View>
-
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setEditModalVisible(false)}
-                className="flex-1 rounded-xl bg-secondary py-3"
-              >
-                <Text className="text-center font-semibold text-secondary-foreground">
-                  {t('cancel')}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleSaveProfile}
-                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3"
-              >
-                <Save className="text-primary-foreground" size={18} />
-                <Text className="text-center font-semibold text-primary-foreground">
-                  {t('save')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }

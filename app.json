@@ -10,7 +10,16 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.liftlog-app.app"
+      "bundleIdentifier": "com.liftlog-app.app",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.487709376366-hnn5cfo187mnip18utjpb7rorsdp6thb"
+            ]
+          }
+        ]
+      }
     },
     "android": {
       "package": "com.liftlog-app.app",

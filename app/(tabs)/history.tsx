@@ -92,7 +92,10 @@ const SetItem = memo(function SetItem({
                 {t('viewProgress')}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={onDelete} className="flex-1 rounded-xl bg-destructive px-4 py-3">
+            <TouchableOpacity
+              onPress={onDelete}
+              className="flex-1 rounded-xl bg-destructive px-4 py-3"
+            >
               <Text className="text-center text-sm font-medium text-white">{t('delete')}</Text>
             </TouchableOpacity>
           </View>
@@ -427,7 +430,8 @@ export default function HistoryScreen() {
   const { totalWorkouts, totalWeight, uniqueDates } = useMemo(() => {
     const total = filteredSets.length;
     const weight = filteredSets.reduce((sum, set) => sum + set.weight * set.reps, 0);
-    const dates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString())).size;
+    const dates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString()))
+      .size;
     return { totalWorkouts: total, totalWeight: weight, uniqueDates: dates };
   }, [filteredSets]);
 

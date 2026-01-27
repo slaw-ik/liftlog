@@ -243,6 +243,12 @@ const translations = {
     loginSuccessful: 'Login successful!',
     loginError: 'An error occurred during login',
 
+    // Google Auth
+    or: 'or',
+    continueWithGoogle: 'Continue with Google',
+    signingIn: 'Signing in...',
+    googleSignInError: 'Failed to sign in with Google',
+
     // Signup Screen
     createAccount: 'Create Account',
     startTrackingProgress: 'Start tracking your progress today',
@@ -523,6 +529,12 @@ const translations = {
     loginSuccessful: 'Вход выполнен!',
     loginError: 'Произошла ошибка при входе',
 
+    // Google Auth
+    or: 'или',
+    continueWithGoogle: 'Продолжить с Google',
+    signingIn: 'Вход...',
+    googleSignInError: 'Не удалось войти через Google',
+
     // Signup Screen
     createAccount: 'Создать аккаунт',
     startTrackingProgress: 'Начните отслеживать свой прогресс уже сегодня',
@@ -802,6 +814,12 @@ const translations = {
     loginSuccess: 'Вхід виконано!',
     loginSuccessful: 'Вхід виконано!',
     loginError: 'Сталася помилка під час входу',
+
+    // Google Auth
+    or: 'або',
+    continueWithGoogle: 'Продовжити з Google',
+    signingIn: 'Вхід...',
+    googleSignInError: 'Не вдалося увійти через Google',
 
     // Signup Screen
     createAccount: 'Створити акаунт',

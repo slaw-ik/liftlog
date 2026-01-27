@@ -7,11 +7,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ArrowLeft, Check, Dumbbell, Eye, EyeOff, Lock, Mail, User } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/components/AuthProvider';
+import { GoogleLogo } from '@/components/GoogleLogo';
 import { useI18n } from '@/components/I18nProvider';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const { signInWithGoogle, isSigningIn, user } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,6 +23,21 @@ export default function SignupScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Redirect if already signed in
+  React.useEffect(() => {
+    if (user) {
+      router.replace('/(tabs)');
+    }
+  }, [user]);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      Alert.alert(t('error'), t('googleSignInError') || 'Failed to sign in with Google');
+    }
+  };
 
   const handleSignup = async () => {
     // Validation
@@ -203,6 +221,26 @@ export default function SignupScreen() {
           >
             <Text className="text-center text-base font-semibold text-primary-foreground">
               {loading ? t('creatingAccount') : t('createAccount')}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View className="mb-4 flex-row items-center">
+            <View className="h-px flex-1 bg-border" />
+            <Text className="mx-4 text-muted-foreground">{t('or') || 'or'}</Text>
+            <View className="h-px flex-1 bg-border" />
+          </View>
+
+          {/* Google Sign-In Button */}
+          <TouchableOpacity
+            onPress={handleGoogleSignIn}
+            disabled={isSigningIn}
+            className={`mb-4 flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn ? 'opacity-50' : ''}`}
+            style={{ elevation: 1 }}
+          >
+            <GoogleLogo size={20} />
+            <Text className="text-base font-medium text-gray-700">
+              {isSigningIn ? t('signingIn') : t('continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 
