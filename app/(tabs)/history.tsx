@@ -130,7 +130,6 @@ export default function HistoryScreen() {
 
   // Loading state - only show on first load
   const [isLoading, setIsLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
 
   // Theme colors for charts
   const chartColors = useMemo(
@@ -154,7 +153,6 @@ export default function HistoryScreen() {
       setAllSets(sets);
       setCategories(cats);
       applyFiltersToSets(sets, filterSection, filterExercise, filterDateRange);
-      setHasLoaded(true);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -162,12 +160,11 @@ export default function HistoryScreen() {
     }
   }, [filterSection, filterExercise, filterDateRange]);
 
+  // Always reload data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      if (!hasLoaded) {
-        loadData();
-      }
-    }, [hasLoaded, loadData])
+      loadData();
+    }, [loadData])
   );
 
   const applyFiltersToSets = (
@@ -284,7 +281,6 @@ export default function HistoryScreen() {
           onPress: async () => {
             try {
               await deleteSet(setId);
-              setHasLoaded(false);
               await loadData();
             } catch (error) {
               Alert.alert('Error', String(error));
@@ -478,30 +474,32 @@ export default function HistoryScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 128 }}
       >
-        {/* Stats Cards */}
-        <View className="px-6 py-4">
-          <View className="flex-row gap-3">
-            <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-              <Calendar className="mb-2 text-primary" size={20} />
-              <Text className="text-2xl font-bold text-foreground">{uniqueDates}</Text>
-              <Text className="text-xs text-muted-foreground">{t('trainingDays')}</Text>
-            </View>
-            <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-              <TrendingUp className="mb-2 text-primary" size={20} />
-              <Text className="text-2xl font-bold text-foreground">{totalWorkouts}</Text>
-              <Text className="text-xs text-muted-foreground">{t('totalSets')}</Text>
-            </View>
-            <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-              <Activity className="mb-2 text-accent" size={20} />
-              <Text className="text-2xl font-bold text-foreground">
-                {totalWeight >= 1000
-                  ? `${(totalWeight / 1000).toFixed(1)}k`
-                  : Math.round(totalWeight)}
-              </Text>
-              <Text className="text-xs text-muted-foreground">{t('totalKgReps')}</Text>
+        {/* Stats Cards - only show when there's data */}
+        {allSets.length > 0 && (
+          <View className="px-6 py-4">
+            <View className="flex-row gap-3">
+              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                <Calendar className="mb-2 text-primary" size={20} />
+                <Text className="text-2xl font-bold text-foreground">{uniqueDates}</Text>
+                <Text className="text-xs text-muted-foreground">{t('trainingDays')}</Text>
+              </View>
+              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                <TrendingUp className="mb-2 text-primary" size={20} />
+                <Text className="text-2xl font-bold text-foreground">{totalWorkouts}</Text>
+                <Text className="text-xs text-muted-foreground">{t('totalSets')}</Text>
+              </View>
+              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                <Activity className="mb-2 text-accent" size={20} />
+                <Text className="text-2xl font-bold text-foreground">
+                  {totalWeight >= 1000
+                    ? `${(totalWeight / 1000).toFixed(1)}k`
+                    : Math.round(totalWeight)}
+                </Text>
+                <Text className="text-xs text-muted-foreground">{t('totalKgReps')}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Charts Section */}
         {allSets.length > 0 && (
@@ -717,25 +715,27 @@ export default function HistoryScreen() {
           </View>
         )}
 
-        {/* Action Buttons */}
-        <View className="flex-row gap-3 px-6 pb-4">
-          <TouchableOpacity
-            onPress={() => setShowFilters(true)}
-            className="flex-1 flex-row items-center justify-center rounded-xl border border-border bg-card px-4 py-3"
-          >
-            <Filter className="mr-2 text-foreground" size={18} />
-            <Text className="font-medium text-foreground">
-              {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={exportToCSV}
-            className="flex-1 flex-row items-center justify-center rounded-xl bg-primary px-4 py-3"
-          >
-            <Download className="mr-2 text-primary-foreground" size={18} />
-            <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Action Buttons - only show when there's data */}
+        {allSets.length > 0 && (
+          <View className="flex-row gap-3 px-6 pb-4">
+            <TouchableOpacity
+              onPress={() => setShowFilters(true)}
+              className="flex-1 flex-row items-center justify-center rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <Filter className="mr-2 text-foreground" size={18} />
+              <Text className="font-medium text-foreground">
+                {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={exportToCSV}
+              className="flex-1 flex-row items-center justify-center rounded-xl bg-primary px-4 py-3"
+            >
+              <Download className="mr-2 text-primary-foreground" size={18} />
+              <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Workout History List */}
         <View className="px-6">
