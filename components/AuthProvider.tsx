@@ -21,6 +21,8 @@ const GOOGLE_WEB_CLIENT_ID =
   '487709376366-41015sldp07vlgi2vqavikce6gudldq4.apps.googleusercontent.com';
 const GOOGLE_IOS_CLIENT_ID =
   '487709376366-hnn5cfo187mnip18utjpb7rorsdp6thb.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT_ID =
+  '487709376366-akgttlcjfc3ffu9o8ptcb506s360o3o9.apps.googleusercontent.com';
 
 // ============================================================================
 // Types
@@ -50,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: GOOGLE_WEB_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
-    // For Android standalone builds, you'd add: androidClientId: 'YOUR_ANDROID_CLIENT_ID'
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
   });
 
   // Listen for Firebase auth state changes
