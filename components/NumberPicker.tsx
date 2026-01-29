@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Picker } from '@react-native-picker/picker';
 
@@ -28,6 +28,146 @@ const generateNumbers = (min: number, max: number, step: number, decimal: boolea
     }
   }
   return numbers;
+};
+
+// Custom Numpad Button
+const NumpadButton = ({
+  label,
+  onPress,
+  variant = 'default',
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'default' | 'action' | 'delete';
+}) => {
+  const bgClass =
+    variant === 'action'
+      ? 'bg-primary'
+      : variant === 'delete'
+        ? 'bg-destructive/10'
+        : 'bg-muted/50';
+  const textClass =
+    variant === 'action'
+      ? 'text-primary-foreground'
+      : variant === 'delete'
+        ? 'text-destructive'
+        : 'text-foreground';
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      className={`m-1 flex-1 items-center justify-center rounded-xl ${bgClass} py-4`}
+      activeOpacity={0.7}
+    >
+      <Text className={`text-2xl font-semibold ${textClass}`}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
+
+// Custom Numpad Component for Android
+const CustomNumpad = ({
+  value,
+  onValueChange,
+  onClose,
+  decimal,
+  label,
+  suffix,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  onClose: () => void;
+  decimal: boolean;
+  label: string;
+  suffix: string;
+}) => {
+  const [tempValue, setTempValue] = useState(value || '');
+
+  const handlePress = (digit: string) => {
+    if (digit === '.') {
+      // Only allow one decimal point
+      if (tempValue.includes('.')) return;
+      // Add leading zero if starting with decimal
+      if (tempValue === '') {
+        setTempValue('0.');
+        return;
+      }
+    }
+    setTempValue((prev) => prev + digit);
+  };
+
+  const handleDelete = () => {
+    setTempValue((prev) => prev.slice(0, -1));
+  };
+
+  const handleClear = () => {
+    setTempValue('');
+  };
+
+  const handleDone = () => {
+    onValueChange(tempValue);
+    onClose();
+  };
+
+  return (
+    <Modal visible transparent animationType="slide">
+      <View className="flex-1 justify-end bg-black/30">
+        <TouchableOpacity className="flex-1" activeOpacity={1} onPress={onClose} />
+        <View className="overflow-hidden rounded-t-3xl bg-card">
+          {/* Header */}
+          <View className="flex-row items-center justify-between border-b border-border bg-muted/30 px-6 py-4">
+            <TouchableOpacity onPress={onClose} className="px-3 py-2">
+              <Text className="text-base font-medium text-muted-foreground">Cancel</Text>
+            </TouchableOpacity>
+            <Text className="text-lg font-bold text-foreground">{label}</Text>
+            <TouchableOpacity onPress={handleDone} className="px-3 py-2">
+              <Text className="text-base font-bold text-primary">Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Current value display */}
+          <View className="items-center bg-primary/5 py-6">
+            <Text className="text-5xl font-bold text-primary">
+              {tempValue || '0'}
+              {suffix ? ` ${suffix}` : ''}
+            </Text>
+          </View>
+
+          {/* Numpad */}
+          <View className="p-3 pb-8">
+            <View className="flex-row">
+              <NumpadButton label="1" onPress={() => handlePress('1')} />
+              <NumpadButton label="2" onPress={() => handlePress('2')} />
+              <NumpadButton label="3" onPress={() => handlePress('3')} />
+            </View>
+            <View className="flex-row">
+              <NumpadButton label="4" onPress={() => handlePress('4')} />
+              <NumpadButton label="5" onPress={() => handlePress('5')} />
+              <NumpadButton label="6" onPress={() => handlePress('6')} />
+            </View>
+            <View className="flex-row">
+              <NumpadButton label="7" onPress={() => handlePress('7')} />
+              <NumpadButton label="8" onPress={() => handlePress('8')} />
+              <NumpadButton label="9" onPress={() => handlePress('9')} />
+            </View>
+            <View className="flex-row">
+              {decimal ? (
+                <NumpadButton label="." onPress={() => handlePress('.')} />
+              ) : (
+                <NumpadButton label="C" onPress={handleClear} variant="delete" />
+              )}
+              <NumpadButton label="0" onPress={() => handlePress('0')} />
+              <NumpadButton label="⌫" onPress={handleDelete} variant="delete" />
+            </View>
+            {decimal && (
+              <View className="flex-row">
+                <NumpadButton label="C" onPress={handleClear} variant="delete" />
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 };
 
 export function NumberPicker({
@@ -127,18 +267,34 @@ export function NumberPicker({
     );
   }
 
-  // For Android - use numpad TextInput
+  // For Android - use custom in-app numpad
+  const displayValue = value ? `${value}${suffix ? ` ${suffix}` : ''}` : placeholder;
+
   return (
     <View className="flex-1">
       <Text className="mb-2 text-sm text-muted-foreground">{label}</Text>
-      <TextInput
-        className="h-14 rounded-xl border border-border bg-card px-4 text-center text-xl font-bold text-foreground"
-        placeholder={placeholder}
-        placeholderTextColor="#71717a"
-        keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
-        value={value}
-        onChangeText={onValueChange}
-      />
+      <TouchableOpacity
+        onPress={() => setShowPicker(true)}
+        className="h-14 justify-center rounded-xl border border-border bg-card px-4"
+        activeOpacity={0.7}
+      >
+        <Text
+          className={`text-center text-xl font-bold ${value ? 'text-foreground' : 'text-muted-foreground'}`}
+        >
+          {displayValue}
+        </Text>
+      </TouchableOpacity>
+
+      {showPicker && (
+        <CustomNumpad
+          value={value}
+          onValueChange={onValueChange}
+          onClose={() => setShowPicker(false)}
+          decimal={decimal}
+          label={label}
+          suffix={suffix}
+        />
+      )}
     </View>
   );
 }
