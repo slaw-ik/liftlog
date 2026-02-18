@@ -164,7 +164,7 @@ const translations = {
     startLoggingWorkouts: 'Start logging your workouts to see your progress here.',
     today: 'Today',
     yesterday: 'Yesterday',
-    viewProgress: 'View Progress',
+    viewProgress: 'Progress',
     dateRange: 'Date Range',
     allTime: 'All Time',
     last7Days: 'Last 7 Days',
@@ -190,6 +190,7 @@ const translations = {
     deleteWorkout: 'Delete Workout',
     deleteWorkoutConfirm: 'Are you sure you want to delete this workout log?',
     confirmDeleteWorkout: 'Are you sure you want to delete this workout log?',
+    editSet: 'Edit Set',
     workoutHistoryExport: 'Workout History Export',
 
     // Profile Screen
@@ -449,7 +450,7 @@ const translations = {
     startLoggingWorkouts: 'Начните записывать свои тренировки, чтобы увидеть прогресс здесь.',
     today: 'Сегодня',
     yesterday: 'Вчера',
-    viewProgress: 'Посмотреть прогресс',
+    viewProgress: 'Прогресс',
     dateRange: 'Период',
     allTime: 'Все время',
     last7Days: 'Последние 7 дней',
@@ -475,6 +476,7 @@ const translations = {
     deleteWorkout: 'Удалить тренировку',
     deleteWorkoutConfirm: 'Вы уверены, что хотите удалить эту запись тренировки?',
     confirmDeleteWorkout: 'Вы уверены, что хотите удалить эту запись тренировки?',
+    editSet: 'Изменить подход',
     workoutHistoryExport: 'Экспорт истории тренировок',
 
     // Profile Screen
@@ -735,7 +737,7 @@ const translations = {
     startLoggingWorkouts: 'Почніть записувати свої тренування, щоб побачити прогрес тут.',
     today: 'Сьогодні',
     yesterday: 'Вчора',
-    viewProgress: 'Переглянути прогрес',
+    viewProgress: 'Прогрес',
     dateRange: 'Період',
     allTime: 'Весь час',
     last7Days: 'Останні 7 днів',
@@ -761,6 +763,7 @@ const translations = {
     deleteWorkout: 'Видалити тренування',
     deleteWorkoutConfirm: 'Ви впевнені, що хочете видалити цей запис тренування?',
     confirmDeleteWorkout: 'Ви впевнені, що хочете видалити цей запис тренування?',
+    editSet: 'Змінити підхід',
     workoutHistoryExport: 'Експорт історії тренувань',
 
     // Profile Screen

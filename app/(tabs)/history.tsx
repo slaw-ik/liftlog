@@ -4,6 +4,7 @@ import {
   Alert,
   Dimensions,
   Modal,
+  Pressable,
   ScrollView,
   Share,
   Text,
@@ -17,9 +18,11 @@ import {
   BarChart3,
   Calendar,
   Download,
+  Edit,
   Filter,
   LineChart,
   TrendingUp,
+  Trash2,
   X,
 } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
@@ -27,8 +30,15 @@ import { BarChart, LineChart as GiftedLineChart } from 'react-native-gifted-char
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
+import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { deleteSet, getAllSetsWithDetails, getCategories, SetWithDetails } from '@/lib/database';
+import {
+  deleteSet,
+  getAllSetsWithDetails,
+  getCategories,
+  SetWithDetails,
+  updateSet,
+} from '@/lib/database';
 import { calculateE1RM, getProgressValue, ProgressMetric } from '@/lib/fitness';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -46,23 +56,33 @@ type ExerciseProgress = {
 
 type ChartView = 'overview' | 'exercise';
 
+// Icon colors match button text (same semantic color per action for UI consistency)
+const ACTION_COLORS = {
+  light: { primary: '#84cc16', foreground: '#0f0f0f', onDestructive: '#ffffff' },
+  dark: { primary: '#a3e635', foreground: '#fafafa', onDestructive: '#ffffff' },
+} as const;
+
 // Memoized set item to prevent re-renders
 const SetItem = memo(function SetItem({
   set,
   isExpanded,
   onToggle,
+  onEdit,
   onViewProgress,
   onDelete,
   t,
   formatTime,
+  iconColors,
 }: {
   set: SetWithDetails;
   isExpanded: boolean;
   onToggle: () => void;
+  onEdit: () => void;
   onViewProgress: () => void;
   onDelete: () => void;
   t: (key: string) => string;
   formatTime: (date: string) => string;
+  iconColors: { primary: string; foreground: string; onDestructive: string };
 }) {
   return (
     <View className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -85,18 +105,32 @@ const SetItem = memo(function SetItem({
         <View className="border-t border-border px-4 pb-4 pt-3">
           <View className="flex-row gap-3">
             <TouchableOpacity
-              onPress={onViewProgress}
-              className="flex-1 rounded-xl bg-secondary px-4 py-3"
+              onPress={onEdit}
+              activeOpacity={0.8}
+              className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl border-2 border-primary bg-primary/15"
             >
-              <Text className="text-center text-sm font-medium text-secondary-foreground">
+              <Edit color={iconColors.primary} size={18} />
+              <Text className="text-sm font-semibold text-primary">{t('edit')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onViewProgress}
+              activeOpacity={0.8}
+              className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-muted/80"
+            >
+              <TrendingUp color={iconColors.foreground} size={18} />
+              <Text className="text-sm font-semibold text-foreground">
                 {t('viewProgress')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onDelete}
-              className="flex-1 rounded-xl bg-destructive px-4 py-3"
+              activeOpacity={0.8}
+              className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-destructive"
             >
-              <Text className="text-center text-sm font-medium text-white">{t('delete')}</Text>
+              <Trash2 color={iconColors.onDestructive} size={18} />
+              <Text className="text-sm font-semibold text-white">
+                {t('delete')}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -127,6 +161,12 @@ export default function HistoryScreen() {
 
   // Expanded log IDs
   const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+
+  // Edit set modal
+  const [editingSet, setEditingSet] = useState<SetWithDetails | null>(null);
+  const [editWeight, setEditWeight] = useState('');
+  const [editReps, setEditReps] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Loading state - only show on first load
   const [isLoading, setIsLoading] = useState(true);
@@ -292,6 +332,49 @@ export default function HistoryScreen() {
     [t, loadData]
   );
 
+  const openEditSet = useCallback((set: SetWithDetails) => {
+    setEditingSet(set);
+    setEditWeight(set.weight.toString());
+    setEditReps(set.reps.toString());
+  }, []);
+
+  const closeEditSet = useCallback(() => {
+    setEditingSet(null);
+    setEditWeight('');
+    setEditReps('');
+    setIsSavingEdit(false);
+  }, []);
+
+  const collapseExpanded = useCallback(() => {
+    setExpandedLogs(new Set());
+  }, []);
+
+  const handleSaveEditSet = useCallback(async () => {
+    if (!editingSet || isSavingEdit) return;
+    const weight = parseFloat(editWeight);
+    const reps = parseInt(editReps, 10);
+    if (Number.isNaN(weight) || Number.isNaN(reps) || weight < 0 || reps < 1) {
+      Alert.alert(t('error'), t('fillAllFields'));
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const setId = editingSet.id;
+      await updateSet(setId, weight, reps, editingSet.load_type);
+      await loadData();
+      setExpandedLogs((prev) => {
+        const next = new Set(prev);
+        next.delete(setId);
+        return next;
+      });
+      closeEditSet();
+    } catch (error) {
+      Alert.alert(t('error'), String(error));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [editingSet, editWeight, editReps, isSavingEdit, t, loadData, closeEditSet]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
@@ -329,13 +412,10 @@ export default function HistoryScreen() {
 
   const toggleLogExpansion = useCallback((setId: number) => {
     setExpandedLogs((prev) => {
-      const newExpanded = new Set(prev);
-      if (newExpanded.has(setId)) {
-        newExpanded.delete(setId);
-      } else {
-        newExpanded.add(setId);
+      if (prev.has(setId)) {
+        return new Set<number>();
       }
-      return newExpanded;
+      return new Set([setId]);
     });
   }, []);
 
@@ -473,7 +553,9 @@ export default function HistoryScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 128 }}
+        onScrollBeginDrag={collapseExpanded}
       >
+        <Pressable onPress={collapseExpanded} style={{ flex: 1 }}>
         {/* Stats Cards - only show when there's data */}
         {allSets.length > 0 && (
           <View className="px-6 py-4">
@@ -720,18 +802,18 @@ export default function HistoryScreen() {
           <View className="flex-row gap-3 px-6 pb-4">
             <TouchableOpacity
               onPress={() => setShowFilters(true)}
-              className="flex-1 flex-row items-center justify-center rounded-xl border border-border bg-card px-4 py-3"
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3"
             >
-              <Filter className="mr-2 text-foreground" size={18} />
+              <Filter className="text-foreground" size={18} />
               <Text className="font-medium text-foreground">
                 {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={exportToCSV}
-              className="flex-1 flex-row items-center justify-center rounded-xl bg-primary px-4 py-3"
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3"
             >
-              <Download className="mr-2 text-primary-foreground" size={18} />
+              <Download className="text-primary-foreground" size={18} />
               <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
             </TouchableOpacity>
           </View>
@@ -766,10 +848,12 @@ export default function HistoryScreen() {
                         set={set}
                         isExpanded={expandedLogs.has(set.id)}
                         onToggle={() => toggleLogExpansion(set.id)}
+                        onEdit={() => openEditSet(set)}
                         onViewProgress={() => viewExerciseProgress(set.exercise_name)}
                         onDelete={() => handleDeleteSet(set.id)}
                         t={t}
                         formatTime={formatTime}
+                        iconColors={ACTION_COLORS[isDark ? 'dark' : 'light']}
                       />
                     ))}
                   </View>
@@ -778,7 +862,58 @@ export default function HistoryScreen() {
             })
           )}
         </View>
+        </Pressable>
       </ScrollView>
+
+      {/* Edit Set Modal */}
+      <Modal visible={editingSet !== null} animationType="slide" transparent>
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="rounded-t-3xl bg-background p-6 pb-8">
+            <View className="mb-6 flex-row items-center justify-between">
+              <Text className="text-2xl font-bold text-foreground">{t('editSet')}</Text>
+              <TouchableOpacity onPress={closeEditSet}>
+                <X className="text-foreground" size={24} />
+              </TouchableOpacity>
+            </View>
+            {editingSet && (
+              <>
+                <Text className="mb-2 text-sm font-medium text-muted-foreground">
+                  {editingSet.exercise_name}
+                </Text>
+                <View className="mb-6 flex-row gap-3">
+                  <View className="min-h-[76px] flex-1">
+                    <WeightPicker
+                      value={editWeight}
+                      onValueChange={setEditWeight}
+                      label={`${t('weight')} (kg)`}
+                    />
+                  </View>
+                  <View className="min-h-[76px] flex-1">
+                    <RepsPicker value={editReps} onValueChange={setEditReps} label={t('reps')} />
+                  </View>
+                </View>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={closeEditSet}
+                    className="flex-1 rounded-xl border border-border bg-muted/50 px-4 py-3"
+                  >
+                    <Text className="text-center font-medium text-foreground">{t('cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSaveEditSet}
+                    disabled={isSavingEdit}
+                    className="flex-1 rounded-xl bg-primary px-4 py-3 disabled:opacity-50"
+                  >
+                    <Text className="text-center font-medium text-primary-foreground">
+                      {t('save')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Filters Modal */}
       <Modal visible={showFilters} animationType="slide" transparent>
