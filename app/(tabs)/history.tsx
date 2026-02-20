@@ -15,7 +15,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Activity,
-  BarChart3,
   Calendar,
   Download,
   Edit,
@@ -26,7 +25,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
-import { BarChart, LineChart as GiftedLineChart } from 'react-native-gifted-charts';
+import { LineChart as GiftedLineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
@@ -53,8 +52,6 @@ type ExerciseProgress = {
   totalSets: number;
   avgReps: number;
 };
-
-type ChartView = 'overview' | 'exercise';
 
 // Icon colors match button text (same semantic color per action for UI consistency)
 const ACTION_COLORS = {
@@ -118,9 +115,7 @@ const SetItem = memo(function SetItem({
               className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-muted/80"
             >
               <TrendingUp color={iconColors.foreground} size={18} />
-              <Text className="text-sm font-semibold text-foreground">
-                {t('viewProgress')}
-              </Text>
+              <Text className="text-sm font-semibold text-foreground">{t('viewProgress')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onDelete}
@@ -128,9 +123,7 @@ const SetItem = memo(function SetItem({
               className="min-h-[44px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-destructive"
             >
               <Trash2 color={iconColors.onDestructive} size={18} />
-              <Text className="text-sm font-semibold text-white">
-                {t('delete')}
-              </Text>
+              <Text className="text-sm font-semibold text-white">{t('delete')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -150,7 +143,6 @@ export default function HistoryScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseProgress | null>(null);
-  const [chartView, setChartView] = useState<ChartView>('overview');
   const [selectedChartExercise, setSelectedChartExercise] = useState<string>('all');
   const [progressMetric, setProgressMetric] = useState<ProgressMetric>('e1rm');
 
@@ -431,38 +423,6 @@ export default function HistoryScreen() {
     return grouped;
   }, [filteredSets]);
 
-  // Generate weekly activity data for bar chart
-  const getWeeklyActivityData = useMemo(() => {
-    const last7Days = [];
-    const now = new Date();
-
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toDateString();
-
-      const daySets = allSets.filter(
-        (set) => new Date(set.workout_date).toDateString() === dateStr
-      ).length;
-
-      const dayName = date.toLocaleDateString(locale, { weekday: 'short' });
-
-      last7Days.push({
-        value: daySets,
-        label: dayName,
-        frontColor: daySets > 0 ? chartColors.primary : chartColors.card,
-        topLabelComponent: () =>
-          daySets > 0 ? (
-            <Text style={{ color: chartColors.text, fontSize: 10, marginBottom: 4 }}>
-              {daySets}
-            </Text>
-          ) : null,
-      });
-    }
-
-    return last7Days;
-  }, [allSets, locale, chartColors]);
-
   // Generate exercise progression data based on selected metric
   const getExerciseChartData = useMemo(() => {
     if (selectedChartExercise === 'all' || !selectedChartExercise) {
@@ -556,312 +516,195 @@ export default function HistoryScreen() {
         onScrollBeginDrag={collapseExpanded}
       >
         <Pressable onPress={collapseExpanded} style={{ flex: 1 }}>
-        {/* Stats Cards - only show when there's data */}
-        {allSets.length > 0 && (
-          <View className="px-6 py-4">
-            <View className="flex-row gap-3">
-              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-                <Calendar className="mb-2 text-primary" size={20} />
-                <Text className="text-2xl font-bold text-foreground">{uniqueDates}</Text>
-                <Text className="text-xs text-muted-foreground">{t('trainingDays')}</Text>
-              </View>
-              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-                <TrendingUp className="mb-2 text-primary" size={20} />
-                <Text className="text-2xl font-bold text-foreground">{totalWorkouts}</Text>
-                <Text className="text-xs text-muted-foreground">{t('totalSets')}</Text>
-              </View>
-              <View className="flex-1 rounded-2xl border border-border bg-card p-4">
-                <Activity className="mb-2 text-accent" size={20} />
-                <Text className="text-2xl font-bold text-foreground">
-                  {totalWeight >= 1000
-                    ? `${(totalWeight / 1000).toFixed(1)}k`
-                    : Math.round(totalWeight)}
-                </Text>
-                <Text className="text-xs text-muted-foreground">{t('totalKgReps')}</Text>
+          {/* Stats Cards - only show when there's data */}
+          {allSets.length > 0 && (
+            <View className="px-6 py-4">
+              <View className="flex-row gap-3">
+                <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                  <Calendar className="mb-2 text-primary" size={20} />
+                  <Text className="text-2xl font-bold text-foreground">{uniqueDates}</Text>
+                  <Text className="text-xs text-muted-foreground">{t('trainingDays')}</Text>
+                </View>
+                <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                  <TrendingUp className="mb-2 text-primary" size={20} />
+                  <Text className="text-2xl font-bold text-foreground">{totalWorkouts}</Text>
+                  <Text className="text-xs text-muted-foreground">{t('totalSets')}</Text>
+                </View>
+                <View className="flex-1 rounded-2xl border border-border bg-card p-4">
+                  <Activity className="mb-2 text-accent" size={20} />
+                  <Text className="text-2xl font-bold text-foreground">
+                    {totalWeight >= 1000
+                      ? `${(totalWeight / 1000).toFixed(1)}k`
+                      : Math.round(totalWeight)}
+                  </Text>
+                  <Text className="text-xs text-muted-foreground">{t('totalKgReps')}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Charts Section */}
+        {/* Progress chart by exercise */}
         {allSets.length > 0 && (
           <View className="mb-4 px-6">
-            {/* Chart View Toggle */}
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              {(['overview', 'exercise'] as const).map((view) => {
-                const isSelected = chartView === view;
-                const Icon = view === 'overview' ? BarChart3 : LineChart;
-                const label = view === 'overview' ? t('weeklyActivity') : t('progress');
-                return (
-                  <TouchableOpacity
-                    key={`${view}-${isSelected}`}
-                    onPress={() => setChartView(view)}
-                    activeOpacity={0.7}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      backgroundColor: isSelected ? chartColors.primary : chartColors.card,
-                      borderColor: isSelected ? chartColors.primary : chartColors.grid,
-                      borderWidth: 1.5,
-                      borderRadius: 12,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                    }}
-                  >
-                    <Icon size={16} color={isSelected ? '#0f0f0f' : chartColors.text} />
-                    <Text
-                      style={{
-                        color: isSelected ? '#0f0f0f' : chartColors.text,
-                        fontSize: 14,
-                        fontWeight: '500',
-                      }}
-                    >
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Chart Content */}
+            <Text className="mb-2 text-lg font-semibold text-foreground">{t('progress')}</Text>
             <View className="rounded-2xl border border-border bg-card p-4">
-              {chartView === 'overview' ? (
-                <View>
-                  <Text className="mb-1 text-lg font-bold text-foreground">{t('setsPerDay')}</Text>
-                  <Text className="mb-4 text-sm text-muted-foreground">{t('last7Days')}</Text>
-                  <View style={{ marginLeft: -10 }}>
-                    <BarChart
-                      data={getWeeklyActivityData}
-                      width={CHART_WIDTH - 20}
-                      height={150}
-                      barWidth={28}
-                      spacing={16}
-                      roundedTop
-                      roundedBottom
-                      noOfSections={4}
-                      yAxisThickness={0}
-                      xAxisThickness={1}
-                      xAxisColor={chartColors.grid}
-                      rulesColor={chartColors.grid}
-                      rulesType="solid"
-                      xAxisLabelTextStyle={{
-                        color: chartColors.textMuted,
-                        fontSize: 10,
-                      }}
-                      yAxisTextStyle={{
-                        color: chartColors.textMuted,
-                        fontSize: 10,
-                      }}
-                      hideRules={false}
-                      barBorderRadius={6}
-                      isAnimated={false}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  <Text className="mb-1 text-lg font-bold text-foreground">
-                    {t('exerciseProgress')}
-                  </Text>
-                  <Text className="mb-3 text-sm text-muted-foreground">
-                    {t('selectExerciseToView')}
-                  </Text>
-
-                  {/* Exercise Selector */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6, marginBottom: 10 }}
-                  >
-                    {exercises.map((exercise) => {
-                      const isSelected = selectedChartExercise === exercise;
-                      return (
-                        <TouchableOpacity
-                          key={`${exercise}-${isSelected}`}
-                          onPress={() => setSelectedChartExercise(exercise)}
-                          activeOpacity={0.7}
-                          style={{
-                            backgroundColor: isSelected ? chartColors.primary : chartColors.card,
-                            borderColor: isSelected ? chartColors.primary : chartColors.grid,
-                            borderWidth: 1.5,
-                            borderRadius: 9999,
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                          }}
-                        >
-                          <Text
+              <View>
+                {/* Exercise selector + Est. 1RM line chart */}
+                <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ gap: 6, marginBottom: 12 }}
+                    >
+                      {exercises.map((exercise) => {
+                        const isSelected = selectedChartExercise === exercise;
+                        return (
+                          <TouchableOpacity
+                            key={`${exercise}-${isSelected}`}
+                            onPress={() => setSelectedChartExercise(exercise)}
+                            activeOpacity={0.7}
                             style={{
-                              color: isSelected ? '#0f0f0f' : chartColors.text,
-                              fontSize: 12,
-                              fontWeight: '500',
+                              backgroundColor: isSelected ? chartColors.primary : chartColors.card,
+                              borderColor: isSelected ? chartColors.primary : chartColors.grid,
+                              borderWidth: 1.5,
+                              borderRadius: 9999,
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
                             }}
                           >
-                            {exercise}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                            <Text
+                              style={{
+                                color: isSelected ? '#0f0f0f' : chartColors.text,
+                                fontSize: 12,
+                                fontWeight: '500',
+                              }}
+                            >
+                              {exercise}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
 
-                  {/* Metric Toggle */}
-                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
-                    {(['e1rm', 'volume', 'weight'] as const).map((metric) => {
-                      const isSelected = progressMetric === metric;
-                      const labels = {
-                        e1rm: t('estimated1RM'),
-                        volume: t('volume'),
-                        weight: t('weightOnly'),
-                      };
-                      return (
-                        <TouchableOpacity
-                          key={`${metric}-${isSelected}`}
-                          onPress={() => setProgressMetric(metric)}
-                          activeOpacity={0.7}
-                          style={{
-                            flex: 1,
-                            backgroundColor: isSelected ? chartColors.primary : chartColors.card,
-                            borderColor: isSelected ? chartColors.primary : chartColors.grid,
-                            borderWidth: 1.5,
-                            borderRadius: 6,
-                            paddingHorizontal: 8,
-                            paddingVertical: 6,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: isSelected ? '#0f0f0f' : chartColors.text,
-                              fontSize: 11,
-                              fontWeight: '600',
+                    {selectedChartExercise && getExerciseChartData.length > 0 ? (
+                      <>
+                        <Text className="mb-1 text-xs text-muted-foreground">
+                          {selectedChartExercise} · {t('estimated1RM')}
+                        </Text>
+                        <View style={{ marginLeft: -10 }}>
+                          <GiftedLineChart
+                            data={getExerciseChartData}
+                            width={CHART_WIDTH - 20}
+                            height={200}
+                            spacing={40}
+                            thickness={2}
+                            color={chartColors.primary}
+                            dataPointsColor={chartColors.primary}
+                            dataPointsRadius={4}
+                            noOfSections={4}
+                            yAxisThickness={0}
+                            xAxisThickness={1}
+                            xAxisColor={chartColors.grid}
+                            rulesColor={chartColors.grid}
+                            rulesType="solid"
+                            xAxisLabelTextStyle={{
+                              color: chartColors.textMuted,
+                              fontSize: 9,
+                              width: 40,
                               textAlign: 'center',
                             }}
-                          >
-                            {labels[metric]}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {/* Line Chart */}
-                  {selectedChartExercise && getExerciseChartData.length > 0 ? (
-                    <View style={{ marginLeft: -10 }}>
-                      <GiftedLineChart
-                        data={getExerciseChartData}
-                        width={CHART_WIDTH - 20}
-                        height={180}
-                        spacing={40}
-                        thickness={2}
-                        color={chartColors.primary}
-                        dataPointsColor={chartColors.primary}
-                        dataPointsRadius={4}
-                        noOfSections={4}
-                        yAxisThickness={0}
-                        xAxisThickness={1}
-                        xAxisColor={chartColors.grid}
-                        rulesColor={chartColors.grid}
-                        rulesType="solid"
-                        xAxisLabelTextStyle={{
-                          color: chartColors.textMuted,
-                          fontSize: 9,
-                          width: 40,
-                          textAlign: 'center',
-                        }}
-                        yAxisTextStyle={{
-                          color: chartColors.textMuted,
-                          fontSize: 10,
-                        }}
-                        hideDataPoints={false}
-                        curved
-                        isAnimated={false}
-                        areaChart
-                        startFillColor={chartColors.primary}
-                        endFillColor={chartColors.background}
-                        startOpacity={0.2}
-                        endOpacity={0.02}
-                      />
-                    </View>
-                  ) : (
-                    <View className="h-40 items-center justify-center">
-                      <LineChart size={32} color={chartColors.textMuted} />
-                      <Text className="mt-2 text-center text-muted-foreground">
-                        {t('selectExerciseAbove')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
+                            yAxisTextStyle={{
+                              color: chartColors.textMuted,
+                              fontSize: 10,
+                            }}
+                            hideDataPoints={false}
+                            curved
+                            isAnimated={false}
+                            areaChart
+                            startFillColor={chartColors.primary}
+                            endFillColor={chartColors.background}
+                            startOpacity={0.2}
+                            endOpacity={0.02}
+                          />
+                        </View>
+                      </>
+                    ) : (
+                      <View className="h-32 items-center justify-center">
+                        <LineChart size={28} color={chartColors.textMuted} />
+                        <Text className="mt-2 text-center text-sm text-muted-foreground">
+                          {t('pickExercise')}
+                        </Text>
+                      </View>
+                    )}
+              </View>
             </View>
           </View>
         )}
 
         {/* Action Buttons - only show when there's data */}
-        {allSets.length > 0 && (
-          <View className="flex-row gap-3 px-6 pb-4">
-            <TouchableOpacity
-              onPress={() => setShowFilters(true)}
-              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3"
-            >
-              <Filter className="text-foreground" size={18} />
-              <Text className="font-medium text-foreground">
-                {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={exportToCSV}
-              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3"
-            >
-              <Download className="text-primary-foreground" size={18} />
-              <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Workout History List */}
-        <View className="px-6">
-          {filteredSets.length === 0 ? (
-            <View className="items-center py-16">
-              <Calendar className="mb-4 text-muted-foreground" size={48} />
-              <Text className="text-center text-xl font-bold text-foreground">
-                {t('noWorkoutsYet')}
-              </Text>
-              <Text className="mt-2 text-center text-muted-foreground">
-                {activeFiltersCount > 0 ? t('noWorkoutsMatchFilters') : t('startLoggingWorkouts')}
-              </Text>
+          {allSets.length > 0 && (
+            <View className="flex-row gap-3 px-6 pb-4">
+              <TouchableOpacity
+                onPress={() => setShowFilters(true)}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                <Filter className="text-foreground" size={18} />
+                <Text className="font-medium text-foreground">
+                  {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={exportToCSV}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3"
+              >
+                <Download className="text-primary-foreground" size={18} />
+                <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            dateKeys.map((dateKey) => {
-              const dateSets = groupedSets[dateKey];
-              const firstSet = dateSets[0];
-              const displayDate = formatDate(firstSet.workout_date);
-
-              return (
-                <View key={dateKey} className="mb-6">
-                  <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
-
-                  <View className="gap-3">
-                    {dateSets.map((set) => (
-                      <SetItem
-                        key={set.id}
-                        set={set}
-                        isExpanded={expandedLogs.has(set.id)}
-                        onToggle={() => toggleLogExpansion(set.id)}
-                        onEdit={() => openEditSet(set)}
-                        onViewProgress={() => viewExerciseProgress(set.exercise_name)}
-                        onDelete={() => handleDeleteSet(set.id)}
-                        t={t}
-                        formatTime={formatTime}
-                        iconColors={ACTION_COLORS[isDark ? 'dark' : 'light']}
-                      />
-                    ))}
-                  </View>
-                </View>
-              );
-            })
           )}
-        </View>
+
+          {/* Workout History List */}
+          <View className="px-6">
+            {filteredSets.length === 0 ? (
+              <View className="items-center py-16">
+                <Calendar className="mb-4 text-muted-foreground" size={48} />
+                <Text className="text-center text-xl font-bold text-foreground">
+                  {t('noWorkoutsYet')}
+                </Text>
+                <Text className="mt-2 text-center text-muted-foreground">
+                  {activeFiltersCount > 0 ? t('noWorkoutsMatchFilters') : t('startLoggingWorkouts')}
+                </Text>
+              </View>
+            ) : (
+              dateKeys.map((dateKey) => {
+                const dateSets = groupedSets[dateKey];
+                const firstSet = dateSets[0];
+                const displayDate = formatDate(firstSet.workout_date);
+
+                return (
+                  <View key={dateKey} className="mb-6">
+                    <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
+
+                    <View className="gap-3">
+                      {dateSets.map((set) => (
+                        <SetItem
+                          key={set.id}
+                          set={set}
+                          isExpanded={expandedLogs.has(set.id)}
+                          onToggle={() => toggleLogExpansion(set.id)}
+                          onEdit={() => openEditSet(set)}
+                          onViewProgress={() => viewExerciseProgress(set.exercise_name)}
+                          onDelete={() => handleDeleteSet(set.id)}
+                          t={t}
+                          formatTime={formatTime}
+                          iconColors={ACTION_COLORS[isDark ? 'dark' : 'light']}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </Pressable>
       </ScrollView>
 
