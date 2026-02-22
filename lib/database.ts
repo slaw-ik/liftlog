@@ -133,6 +133,14 @@ async function initializeSchema(): Promise<void> {
   await migrateExerciseI18nKey();
 }
 
+/**
+ * Known name → correct i18n_key. Use when a name was previously backfilled with the wrong key
+ * (e.g. "Зведення сидячи" must be hipAdduction, not seatedFlye). We update these regardless of current i18n_key.
+ */
+const EXERCISE_NAME_KEY_CORRECTIONS: [string, string][] = [
+  ['Зведення сидячи', 'defaultExercises.hipAdduction'],
+];
+
 /** Add i18n_key to exercises and backfill for existing default exercises (by name). */
 async function migrateExerciseI18nKey(): Promise<void> {
   if (!db) {
@@ -144,15 +152,28 @@ async function migrateExerciseI18nKey(): Promise<void> {
     // Column already exists (e.g. after second app launch)
   }
   const nameToKey = getDefaultExerciseNameToKeyMap();
+
+  // 1) Backfill rows that have no i18n_key
   const rows = await db.getAllAsync<{ id: number; name: string }>(
     'SELECT id, name FROM exercises WHERE i18n_key IS NULL'
   );
   for (const row of rows) {
     const name = row.name?.trim() ?? '';
-    const key = nameToKey[name] || nameToKey[row.name];
+    const key =
+      nameToKey[name] ||
+      nameToKey[row.name] ||
+      nameToKey[name.toLowerCase()];
     if (key) {
       await db.runAsync('UPDATE exercises SET i18n_key = ? WHERE id = ?', [key, row.id]);
     }
+  }
+
+  // 2) Correct previously wrong backfills (e.g. "Зведення сидячи" → hipAdduction, not seatedFlye)
+  for (const [exerciseName, correctKey] of EXERCISE_NAME_KEY_CORRECTIONS) {
+    await db.runAsync(
+      'UPDATE exercises SET i18n_key = ? WHERE name = ?',
+      [correctKey, exerciseName]
+    );
   }
 }
 
@@ -626,3 +647,4 @@ export async function hasExercises(): Promise<boolean> {
   );
   return (result?.count ?? 0) > 0;
 }
+

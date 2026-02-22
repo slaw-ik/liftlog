@@ -43,7 +43,8 @@ Translations live in code (e.g. in `lib/i18n.ts`): for each language we have a m
 When the app was updated, we added a **migration**:
 
 1. A new column `i18n_key` was added to the exercises table.
-2. For every **existing** exercise whose **name** matches one of the built-in names (in any of our languages), we set `i18n_key` to the right key.
+2. **Backfill:** For every existing exercise that has no `i18n_key`, we look up its **name** in a map that includes all built-in names (in every language) plus **aliases** (historical or alternate names, e.g. "розводка" → Dumbbell Fly). Matching is case-insensitive. When we find a match, we set `i18n_key` to the right key.
+3. **Corrections:** A short list of known name → key corrections is applied so that if a name was ever backfilled with the wrong key (e.g. a similar name in another language), we overwrite it with the correct key.
 
 So old data is fixed up once: your existing “Bench Press” (or “Жим лёжа” if it was in Russian) gets `i18n_key = defaultExercises.benchPress`, and from then on it behaves like a default exercise and changes with the language.
 
@@ -74,3 +75,5 @@ So one rule everywhere: **defaults translate, custom names stay as entered**.
 - **getCategoryDisplayName(category, t)** = returns the translated label for the three default sections (by matching stored category to a key), or the raw category for custom sections.
 - **Seed** = inserting the initial list of default exercises into the database.
 - **Migration** = a one-time update to the database (e.g. add column, backfill `i18n_key` for existing rows).
+- **Aliases** = alternate or historical exercise names (e.g. in another language or wording) that the migration maps to the same i18n key as the canonical name.
+- **Corrections** = a small list of exercise names that were once backfilled with the wrong key; the migration overwrites their `i18n_key` with the correct one.

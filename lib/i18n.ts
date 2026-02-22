@@ -133,7 +133,7 @@ const translations = {
       pushdown: 'Pushdown',
       seatedFlye: 'Seated Flye',
       rearDelt: 'Rear Delt',
-      dipsPause: 'Dips (Pause)',
+      dipsPause: 'Dips',
       squats: 'Squats',
       lunges: 'Lunges',
       quadriceps: 'Quadriceps',
@@ -414,12 +414,12 @@ const translations = {
       benchPress: 'Жим лёжа',
       inclineDumbbellPress: 'Наклонный жим гантелей',
       seatedPress: 'Сидячий жим',
-      flyDumbbell: 'Разводка гантелей',
+      flyDumbbell: 'Разводка гантелей лёжа',
       lateralRaise: 'Боковые подъёмы',
       pushdown: 'Разгибание на блоке',
       seatedFlye: 'Сидячая разводка',
       rearDelt: 'Задняя дельта',
-      dipsPause: 'Отжимания на брусьях (пауза)',
+      dipsPause: 'Отжимания на брусьях',
       squats: 'Приседания',
       lunges: 'Выпады',
       quadriceps: 'Квадрицепс',
@@ -702,12 +702,12 @@ const translations = {
       benchPress: 'Жим лежачи',
       inclineDumbbellPress: 'Похилий жим гантелей',
       seatedPress: 'Сидячий жим',
-      flyDumbbell: 'Розводка гантелей',
+      flyDumbbell: 'Розводка гантелей лежачи',
       lateralRaise: 'Бічні підйоми',
       pushdown: 'Розгинання на блоці',
       seatedFlye: 'Сидяча розводка',
       rearDelt: 'Задня дельта',
-      dipsPause: 'Віджимання на брусах (пауза)',
+      dipsPause: 'Віджимання на брусах',
       squats: 'Присідання',
       lunges: 'Випади',
       quadriceps: 'Квадріцепс',
@@ -869,43 +869,68 @@ const translations = {
 
 const i18n = new I18n(translations);
 
-/** Map from default exercise name (any locale) to i18n key, for DB migration. */
-export function getDefaultExerciseNameToKeyMap(): Record<string, string> {
+// ---------------------------------------------------------------------------
+// Constants & types for default exercise/section helpers
+// ---------------------------------------------------------------------------
+
+const SUPPORTED_LOCALES = ['en', 'ru', 'uk'] as const;
+const DEFAULT_SECTION_KEYS = ['pulls', 'presses', 'legs'] as const;
+
+type LocaleWithDefaultExercises = { defaultExercises?: Record<string, string> };
+type LocaleWithDefaultSections = { defaultSections?: Record<string, string> };
+
+function getLocaleExercises(locale: string): Record<string, string> | undefined {
+  return (translations as Record<string, LocaleWithDefaultExercises>)[locale]?.defaultExercises;
+}
+
+function getLocaleSections(locale: string): Record<string, string> | undefined {
+  return (translations as Record<string, LocaleWithDefaultSections>)[locale]?.defaultSections;
+}
+
+// Cached maps (translations are static; avoid rebuilding on every call)
+let cachedExerciseNameToKeyMap: Record<string, string> | null = null;
+let cachedSectionNameToKeyMap: Record<string, string> | null = null;
+
+/** Historical/alternate exercise names → i18n key (for migration backfill). Sorted by target key. */
+const EXERCISE_NAME_ALIASES: [string, string][] = [
+  ['бицепс со штангой', 'defaultExercises.barbellCurl'],
+  ['голень сидя/стоя', 'defaultExercises.calfRaise'],
+  ['присед в кроссовере', 'defaultExercises.cableSquat'],
+  ['брусья с паузой', 'defaultExercises.dipsPause'],
+  ['Віджимання на брусах', 'defaultExercises.dipsPause'],
+  ['экстензия', 'defaultExercises.extension'],
+  ['предплечие', 'defaultExercises.forearm'],
+  ['розводка', 'defaultExercises.flyDumbbell'],
+  ['Разводка гантелей', 'defaultExercises.flyDumbbell'],
+  ['Розводка гантелей', 'defaultExercises.flyDumbbell'],
+  ['ягодичный мост', 'defaultExercises.gluteBridge'],
+  ['разведение сидя', 'defaultExercises.hipAbduction'],
+  ['сведение сидя', 'defaultExercises.hipAdduction'],
+  ['Зведення сидячи', 'defaultExercises.hipAdduction'],
+  ['разведение стоя', 'defaultExercises.lateralRaise'],
+  ['выпады/болгарские', 'defaultExercises.lunges'],
+  ['жим к низу', 'defaultExercises.pushdown'],
+  ['квадриципс', 'defaultExercises.quadriceps'],
+  ['жим сидя', 'defaultExercises.seatedPress'],
+];
+
+function buildExerciseNameToKeyMap(): Record<string, string> {
   const map: Record<string, string> = {};
 
-  // 1) Canonical names from all locales + trimmed + lowercase (so "верхняя тяга" matches "Верхняя тяга")
-  const locales = ['en', 'ru', 'uk'] as const;
-  for (const locale of locales) {
-    const loc = (translations as Record<string, { defaultExercises?: Record<string, string> }>)[locale];
-    if (loc?.defaultExercises) {
-      for (const [key, name] of Object.entries(loc.defaultExercises)) {
-        const i18nKey = `defaultExercises.${key}`;
-        map[name] = i18nKey;
-        map[name.trim()] = i18nKey;
-        map[name.toLowerCase()] = i18nKey;
-      }
+  for (const locale of SUPPORTED_LOCALES) {
+    const exercises = getLocaleExercises(locale);
+    if (!exercises) {
+      continue;
+    }
+    for (const [key, name] of Object.entries(exercises)) {
+      const i18nKey = `defaultExercises.${key}`;
+      map[name] = i18nKey;
+      map[name.trim()] = i18nKey;
+      map[name.toLowerCase()] = i18nKey;
     }
   }
 
-  // 2) Aliases: historical/alternate names that don't match canonical (e.g. different wording or typos)
-  const aliases: [string, string][] = [
-    ['бицепс со штангой', 'defaultExercises.barbellCurl'],
-    ['экстензия', 'defaultExercises.extension'],
-    ['розводка', 'defaultExercises.flyDumbbell'],
-    ['разведение стоя', 'defaultExercises.lateralRaise'],
-    ['жим к низу', 'defaultExercises.pushdown'],
-    ['брусья с паузой', 'defaultExercises.dipsPause'],
-    ['выпады/болгарские', 'defaultExercises.lunges'],
-    ['квадриципс', 'defaultExercises.quadriceps'],
-    ['голень сидя/стоя', 'defaultExercises.calfRaise'],
-    ['присед в кроссовере', 'defaultExercises.cableSquat'],
-    ['предплечие', 'defaultExercises.forearm'],
-    ['жим сидя', 'defaultExercises.seatedPress'],
-    ['разведение сидя', 'defaultExercises.hipAbduction'],
-    ['сведение сидя', 'defaultExercises.hipAdduction'],
-    ['ягодичный мост', 'defaultExercises.gluteBridge'],
-  ];
-  for (const [alias, i18nKey] of aliases) {
+  for (const [alias, i18nKey] of EXERCISE_NAME_ALIASES) {
     map[alias] = i18nKey;
     map[alias.toLowerCase()] = i18nKey;
   }
@@ -913,38 +938,48 @@ export function getDefaultExerciseNameToKeyMap(): Record<string, string> {
   return map;
 }
 
-/** English name for a default exercise key (for seeding so DB has stable name). */
-export function getEnglishDefaultExerciseName(key: string): string {
-  const en = (translations as Record<string, { defaultExercises?: Record<string, string> }>).en;
-  return en?.defaultExercises?.[key] ?? key;
+/** Map from default exercise name (any locale) to i18n key, for DB migration. Cached. */
+export function getDefaultExerciseNameToKeyMap(): Record<string, string> {
+  if (!cachedExerciseNameToKeyMap) {
+    cachedExerciseNameToKeyMap = buildExerciseNameToKeyMap();
+  }
+  return cachedExerciseNameToKeyMap;
 }
 
-/** Map from default section/category name (any locale) to i18n key, for display. */
-export function getDefaultSectionNameToKeyMap(): Record<string, string> {
+/** English name for a default exercise key (for seeding so DB has stable name). */
+export function getEnglishDefaultExerciseName(key: string): string {
+  const en = getLocaleExercises('en');
+  return en?.[key] ?? key;
+}
+
+function buildSectionNameToKeyMap(): Record<string, string> {
   const map: Record<string, string> = {};
-  const locales = ['en', 'ru', 'uk'] as const;
-  const keys = ['pulls', 'presses', 'legs'] as const;
-  for (const locale of locales) {
-    const loc = (translations as Record<string, { defaultSections?: Record<string, string> }>)[locale];
-    if (loc?.defaultSections) {
-      for (const key of keys) {
-        const name = loc.defaultSections[key];
-        if (name) {
-          map[name] = `defaultSections.${key}`;
-        }
+  for (const locale of SUPPORTED_LOCALES) {
+    const sections = getLocaleSections(locale);
+    if (!sections) {
+      continue;
+    }
+    for (const key of DEFAULT_SECTION_KEYS) {
+      const name = sections[key];
+      if (name) {
+        map[name] = `defaultSections.${key}`;
       }
     }
   }
   return map;
 }
 
+/** Map from default section/category name (any locale) to i18n key, for display. Cached. */
+export function getDefaultSectionNameToKeyMap(): Record<string, string> {
+  if (!cachedSectionNameToKeyMap) {
+    cachedSectionNameToKeyMap = buildSectionNameToKeyMap();
+  }
+  return cachedSectionNameToKeyMap;
+}
+
 /** Display name for a category: translated if it's a default section, else raw. */
-export function getCategoryDisplayName(
-  category: string,
-  t: (key: string) => string
-): string {
-  const nameToKey = getDefaultSectionNameToKeyMap();
-  const key = nameToKey[category];
+export function getCategoryDisplayName(category: string, t: (key: string) => string): string {
+  const key = getDefaultSectionNameToKeyMap()[category];
   return key ? t(key) : category;
 }
 
@@ -952,11 +987,12 @@ export function getCategoryDisplayName(
 i18n.defaultLocale = 'en';
 i18n.enableFallback = true;
 
-// Safely get device locale
+// Safely get device locale (expo-localization exposes getLocales(), not .locale)
 try {
-  const deviceLocale = Localization.locale || Localization.getLocales()?.[0]?.languageCode || 'en';
-  i18n.locale = deviceLocale.split('-')[0]; // Get language code (e.g., 'en' from 'en-US')
-} catch (error) {
+  const locales = Localization.getLocales();
+  const deviceLocale = locales?.[0]?.languageCode ?? 'en';
+  i18n.locale = deviceLocale;
+} catch {
   i18n.locale = 'en'; // Fallback to English
 }
 

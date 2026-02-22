@@ -142,6 +142,8 @@ That’s the whole structure: three tables and these two relations (workouts →
 
 - **Built-in (default) exercises** are seeded with an English **name** and an **i18n_key** (e.g. `defaultExercises.benchPress`). The UI shows the translated label for the current language using this key; the stored `name` stays English for consistency and for export/backfill.
 - **User-created exercises** have no `i18n_key`; the UI always shows their stored **name**.
-- **Migration:** On first run after adding `i18n_key`, existing exercises whose `name` matches any built-in name (in any supported locale) get their `i18n_key` backfilled so they start showing translated names.
+- **Migration:** On first run after adding `i18n_key`:
+  1. **Backfill:** Existing exercises with `i18n_key IS NULL` whose `name` matches a built-in name (in any locale) or a known alias get `i18n_key` set. Matching is case-insensitive for robustness.
+  2. **Corrections:** A small list of known wrong backfills (e.g. a name that was once mapped to the wrong key) is applied so those rows get the correct `i18n_key` even if they were already set.
 - **Display:** Anywhere we show an exercise name, we use: if `i18n_key` is set → show `t(i18n_key)`; else → show `name`. Helpers: `getExerciseDisplayName(name, i18nKey, t)` and, when the identifier is a "stable id" (i18n key or custom name), `getExerciseDisplayNameForStableId(stableId, t)`.
 - **Categories:** Default section names (PULLS, PRESSES, LEGS) are translated in the UI via `getCategoryDisplayName(category, t)` (no DB column); custom section names are shown as stored.
