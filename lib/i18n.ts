@@ -869,6 +869,85 @@ const translations = {
 
 const i18n = new I18n(translations);
 
+/** Map from default exercise name (any locale) to i18n key, for DB migration. */
+export function getDefaultExerciseNameToKeyMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+
+  // 1) Canonical names from all locales + trimmed + lowercase (so "верхняя тяга" matches "Верхняя тяга")
+  const locales = ['en', 'ru', 'uk'] as const;
+  for (const locale of locales) {
+    const loc = (translations as Record<string, { defaultExercises?: Record<string, string> }>)[locale];
+    if (loc?.defaultExercises) {
+      for (const [key, name] of Object.entries(loc.defaultExercises)) {
+        const i18nKey = `defaultExercises.${key}`;
+        map[name] = i18nKey;
+        map[name.trim()] = i18nKey;
+        map[name.toLowerCase()] = i18nKey;
+      }
+    }
+  }
+
+  // 2) Aliases: historical/alternate names that don't match canonical (e.g. different wording or typos)
+  const aliases: [string, string][] = [
+    ['бицепс со штангой', 'defaultExercises.barbellCurl'],
+    ['экстензия', 'defaultExercises.extension'],
+    ['розводка', 'defaultExercises.flyDumbbell'],
+    ['разведение стоя', 'defaultExercises.lateralRaise'],
+    ['жим к низу', 'defaultExercises.pushdown'],
+    ['брусья с паузой', 'defaultExercises.dipsPause'],
+    ['выпады/болгарские', 'defaultExercises.lunges'],
+    ['квадриципс', 'defaultExercises.quadriceps'],
+    ['голень сидя/стоя', 'defaultExercises.calfRaise'],
+    ['присед в кроссовере', 'defaultExercises.cableSquat'],
+    ['предплечие', 'defaultExercises.forearm'],
+    ['жим сидя', 'defaultExercises.seatedPress'],
+    ['разведение сидя', 'defaultExercises.hipAbduction'],
+    ['сведение сидя', 'defaultExercises.hipAdduction'],
+    ['ягодичный мост', 'defaultExercises.gluteBridge'],
+  ];
+  for (const [alias, i18nKey] of aliases) {
+    map[alias] = i18nKey;
+    map[alias.toLowerCase()] = i18nKey;
+  }
+
+  return map;
+}
+
+/** English name for a default exercise key (for seeding so DB has stable name). */
+export function getEnglishDefaultExerciseName(key: string): string {
+  const en = (translations as Record<string, { defaultExercises?: Record<string, string> }>).en;
+  return en?.defaultExercises?.[key] ?? key;
+}
+
+/** Map from default section/category name (any locale) to i18n key, for display. */
+export function getDefaultSectionNameToKeyMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+  const locales = ['en', 'ru', 'uk'] as const;
+  const keys = ['pulls', 'presses', 'legs'] as const;
+  for (const locale of locales) {
+    const loc = (translations as Record<string, { defaultSections?: Record<string, string> }>)[locale];
+    if (loc?.defaultSections) {
+      for (const key of keys) {
+        const name = loc.defaultSections[key];
+        if (name) {
+          map[name] = `defaultSections.${key}`;
+        }
+      }
+    }
+  }
+  return map;
+}
+
+/** Display name for a category: translated if it's a default section, else raw. */
+export function getCategoryDisplayName(
+  category: string,
+  t: (key: string) => string
+): string {
+  const nameToKey = getDefaultSectionNameToKeyMap();
+  const key = nameToKey[category];
+  return key ? t(key) : category;
+}
+
 // Set default locale
 i18n.defaultLocale = 'en';
 i18n.enableFallback = true;
@@ -898,8 +977,8 @@ export const initializeI18n = async () => {
             i18n.locale = deviceLang;
           }
         }
-      } catch (localeError) {
-        console.log('Could not detect device language, using default');
+      } catch {
+        // Use default locale if device language detection fails
       }
     }
   } catch (error) {

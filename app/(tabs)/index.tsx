@@ -6,6 +6,7 @@ import { ArrowRight, Check, ChevronRight, Flame, Target, Zap } from 'lucide-reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
+import { getCategoryDisplayName } from '@/lib/i18n';
 import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -14,6 +15,7 @@ import {
   Exercise,
   getAllExercises,
   getCategories,
+  getExerciseDisplayName,
   getSetsByExercise,
   getTodaySets,
   getWeeklyStats,
@@ -400,10 +402,14 @@ export default function WorkoutScreen() {
                       </View>
                     )}
                     <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
-                      {set.exercise_name}
+                      {getExerciseDisplayName(
+                        set.exercise_name,
+                        set.exercise_i18n_key ?? null,
+                        t
+                      )}
                     </Text>
                     <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
-                      {set.exercise_category}
+                      {getCategoryDisplayName(set.exercise_category, t)}
                     </Text>
                     <View className="mt-3 flex-row items-baseline">
                       <Text className="text-2xl font-bold text-foreground">{set.weight}</Text>
@@ -475,7 +481,9 @@ export default function WorkoutScreen() {
                       activeOpacity={0.7}
                     >
                       <View>
-                        <Text className="text-lg font-bold text-foreground">{section.name}</Text>
+                        <Text className="text-lg font-bold text-foreground">
+                          {getCategoryDisplayName(section.name, t)}
+                        </Text>
                         <Text className="mt-1 text-sm text-muted-foreground">
                           {section.exercises.length} {t('exercises')}
                         </Text>
@@ -490,7 +498,9 @@ export default function WorkoutScreen() {
                       className="mb-3 rounded-2xl border border-border bg-card p-5"
                       activeOpacity={0.7}
                     >
-                      <Text className="text-lg font-semibold text-foreground">{exercise.name}</Text>
+                      <Text className="text-lg font-semibold text-foreground">
+                        {getExerciseDisplayName(exercise.name, exercise.i18n_key ?? null, t)}
+                      </Text>
                       <View className="mt-2 flex-row items-center">
                         <Text className="text-xs text-muted-foreground">
                           {t('last')}:{' '}

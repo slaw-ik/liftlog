@@ -1,3 +1,14 @@
+# LiftLog
+
+A workout logging app built with [Expo](https://expo.dev). Log sets (exercise, weight, reps), organize exercises by sections, and view history and progress.
+
+## Features
+
+- **Multi-language (i18n):** UI, default exercise names, and default section names (PULLS, PRESSES, LEGS) in English, Russian, and Ukrainian. When you change the app language, **default** exercises and sections are shown in the selected language; **custom** ones keep the name you entered. See [docs/DEFAULT-EXERCISE-TRANSLATION.md](docs/DEFAULT-EXERCISE-TRANSLATION.md) for how it works.
+- **Database:** SQLite (see [docs/DATABASE.md](docs/DATABASE.md) for schema and `exercises.i18n_key`).
+
+---
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).

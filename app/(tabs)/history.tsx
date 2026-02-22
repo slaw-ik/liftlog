@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -29,12 +29,15 @@ import { LineChart as GiftedLineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
+import { getCategoryDisplayName } from '@/lib/i18n';
 import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   deleteSet,
   getAllSetsWithDetails,
   getCategories,
+  getExerciseDisplayName,
+  getExerciseDisplayNameForStableId,
   SetWithDetails,
   updateSet,
 } from '@/lib/database';
@@ -86,8 +89,12 @@ const SetItem = memo(function SetItem({
       <TouchableOpacity onPress={onToggle} className="p-4">
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-base font-bold text-foreground">{set.exercise_name}</Text>
-            <Text className="mt-1 text-sm text-muted-foreground">{set.exercise_category}</Text>
+            <Text className="text-base font-bold text-foreground">
+              {getExerciseDisplayName(set.exercise_name, set.exercise_i18n_key ?? null, t)}
+            </Text>
+            <Text className="mt-1 text-sm text-muted-foreground">
+              {getCategoryDisplayName(set.exercise_category, t)}
+            </Text>
           </View>
           <View className="items-end">
             <Text className="text-lg font-bold text-primary">
@@ -184,57 +191,65 @@ export default function HistoryScreen() {
 
       setAllSets(sets);
       setCategories(cats);
-      applyFiltersToSets(sets, filterSection, filterExercise, filterDateRange);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [filterSection, filterExercise, filterDateRange]);
+  }, []);
 
-  // Always reload data when screen comes into focus
+  // Always reload data when screen comes into focus so new sets appear immediately
   useFocusEffect(
     useCallback(() => {
       loadData();
     }, [loadData])
   );
 
-  const applyFiltersToSets = (
-    setsToFilter: SetWithDetails[],
-    section: string,
-    exercise: string,
-    dateRange: 'week' | 'month' | 'all'
-  ) => {
-    let filtered = [...setsToFilter];
+  const applyFiltersToSets = useCallback(
+    (
+      setsToFilter: SetWithDetails[],
+      section: string,
+      exercise: string,
+      dateRange: 'week' | 'month' | 'all'
+    ) => {
+      let filtered = [...setsToFilter];
 
-    if (section !== 'all') {
-      filtered = filtered.filter((set) => set.exercise_category === section);
-    }
-
-    if (exercise !== 'all') {
-      filtered = filtered.filter((set) => set.exercise_name === exercise);
-    }
-
-    if (dateRange !== 'all') {
-      const now = new Date();
-      const cutoffDate = new Date();
-      if (dateRange === 'week') {
-        cutoffDate.setDate(now.getDate() - 7);
-      } else if (dateRange === 'month') {
-        cutoffDate.setDate(now.getDate() - 30);
+      if (section !== 'all') {
+        filtered = filtered.filter((set) => set.exercise_category === section);
       }
-      filtered = filtered.filter((set) => new Date(set.workout_date) >= cutoffDate);
-    }
 
+      if (exercise !== 'all') {
+        filtered = filtered.filter(
+          (set) => (set.exercise_i18n_key ?? set.exercise_name) === exercise
+        );
+      }
+
+      if (dateRange !== 'all') {
+        const now = new Date();
+        const cutoffDate = new Date();
+        if (dateRange === 'week') {
+          cutoffDate.setDate(now.getDate() - 7);
+        } else if (dateRange === 'month') {
+          cutoffDate.setDate(now.getDate() - 30);
+        }
+        filtered = filtered.filter((set) => new Date(set.workout_date) >= cutoffDate);
+      }
+
+      return filtered;
+    },
+    []
+  );
+
+  // Single source of truth: derive filteredSets from allSets + filter state (fixes new sets not showing)
+  useEffect(() => {
+    const filtered = applyFiltersToSets(
+      allSets,
+      filterSection,
+      filterExercise,
+      filterDateRange
+    );
     setFilteredSets(filtered);
-  };
-
-  // Re-apply filters when filter state changes
-  useMemo(() => {
-    if (allSets.length > 0) {
-      applyFiltersToSets(allSets, filterSection, filterExercise, filterDateRange);
-    }
-  }, [filterSection, filterExercise, filterDateRange, allSets]);
+  }, [allSets, filterSection, filterExercise, filterDateRange, applyFiltersToSets]);
 
   const clearFilters = () => {
     setFilterSection('all');
@@ -244,12 +259,14 @@ export default function HistoryScreen() {
 
   const exercises = useMemo(() => {
     const exerciseSet = new Set<string>();
-    allSets.forEach((set) => exerciseSet.add(set.exercise_name));
+    allSets.forEach((set) => exerciseSet.add(set.exercise_i18n_key ?? set.exercise_name));
     return Array.from(exerciseSet).sort();
   }, [allSets]);
 
-  const getExerciseProgress = (exerciseName: string): ExerciseProgress => {
-    const exerciseSets = allSets.filter((set) => set.exercise_name === exerciseName);
+  const getExerciseProgress = (exerciseStableId: string): ExerciseProgress => {
+    const exerciseSets = allSets.filter(
+      (set) => (set.exercise_i18n_key ?? set.exercise_name) === exerciseStableId
+    );
     const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
     const maxE1RM = Math.max(...exerciseSets.map((set) => calculateE1RM(set.weight, set.reps)), 0);
     const totalSets = exerciseSets.length;
@@ -257,7 +274,7 @@ export default function HistoryScreen() {
       totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
 
     return {
-      exerciseName,
+      exerciseName: exerciseStableId,
       sets: exerciseSets.sort(
         (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
       ),
@@ -269,8 +286,8 @@ export default function HistoryScreen() {
   };
 
   const viewExerciseProgress = useCallback(
-    (exerciseName: string) => {
-      const progress = getExerciseProgress(exerciseName);
+    (exerciseStableId: string) => {
+      const progress = getExerciseProgress(exerciseStableId);
       setSelectedExercise(progress);
       setShowProgressModal(true);
     },
@@ -342,7 +359,9 @@ export default function HistoryScreen() {
   }, []);
 
   const handleSaveEditSet = useCallback(async () => {
-    if (!editingSet || isSavingEdit) return;
+    if (!editingSet || isSavingEdit) {
+      return;
+    }
     const weight = parseFloat(editWeight);
     const reps = parseInt(editReps, 10);
     if (Number.isNaN(weight) || Number.isNaN(reps) || weight < 0 || reps < 1) {
@@ -420,6 +439,12 @@ export default function HistoryScreen() {
       }
       grouped[dateKey].push(set);
     });
+    // Within each day, show most recent sets first (last logged at top)
+    Object.keys(grouped).forEach((key) => {
+      grouped[key].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    });
     return grouped;
   }, [filteredSets]);
 
@@ -430,7 +455,9 @@ export default function HistoryScreen() {
     }
 
     const exerciseSets = allSets
-      .filter((set) => set.exercise_name === selectedChartExercise)
+      .filter(
+        (set) => (set.exercise_i18n_key ?? set.exercise_name) === selectedChartExercise
+      )
       .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
       .slice(-15);
 
@@ -571,15 +598,15 @@ export default function HistoryScreen() {
                               paddingVertical: 6,
                             }}
                           >
-                            <Text
-                              style={{
-                                color: isSelected ? '#0f0f0f' : chartColors.text,
-                                fontSize: 12,
-                                fontWeight: '500',
-                              }}
-                            >
-                              {exercise}
-                            </Text>
+                        <Text
+                            style={{
+                              color: isSelected ? '#0f0f0f' : chartColors.text,
+                              fontSize: 12,
+                              fontWeight: '500',
+                            }}
+                          >
+                            {getExerciseDisplayNameForStableId(exercise, t)}
+                          </Text>
                           </TouchableOpacity>
                         );
                       })}
@@ -588,7 +615,8 @@ export default function HistoryScreen() {
                     {selectedChartExercise && getExerciseChartData.length > 0 ? (
                       <>
                         <Text className="mb-1 text-xs text-muted-foreground">
-                          {selectedChartExercise} · {t('estimated1RM')}
+                          {getExerciseDisplayNameForStableId(selectedChartExercise, t)}{' '}
+                          · {t('estimated1RM')}
                         </Text>
                         <View style={{ marginLeft: -10 }}>
                           <GiftedLineChart
@@ -692,7 +720,9 @@ export default function HistoryScreen() {
                           isExpanded={expandedLogs.has(set.id)}
                           onToggle={() => toggleLogExpansion(set.id)}
                           onEdit={() => openEditSet(set)}
-                          onViewProgress={() => viewExerciseProgress(set.exercise_name)}
+                          onViewProgress={() =>
+                            viewExerciseProgress(set.exercise_i18n_key ?? set.exercise_name)
+                          }
                           onDelete={() => handleDeleteSet(set.id)}
                           t={t}
                           formatTime={formatTime}
@@ -721,7 +751,11 @@ export default function HistoryScreen() {
             {editingSet && (
               <>
                 <Text className="mb-2 text-sm font-medium text-muted-foreground">
-                  {editingSet.exercise_name}
+                  {getExerciseDisplayName(
+                    editingSet.exercise_name,
+                    editingSet.exercise_i18n_key ?? null,
+                    t
+                  )}
                 </Text>
                 <View className="mb-6 flex-row gap-3">
                   <View className="min-h-[76px] flex-1">
@@ -835,7 +869,7 @@ export default function HistoryScreen() {
                           filterSection === category ? 'text-primary-foreground' : 'text-foreground'
                         }`}
                       >
-                        {category}
+                        {getCategoryDisplayName(category, t)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -879,7 +913,7 @@ export default function HistoryScreen() {
                             : 'text-foreground'
                         }`}
                       >
-                        {exercise}
+                        {getExerciseDisplayNameForStableId(exercise, t)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -917,7 +951,8 @@ export default function HistoryScreen() {
             <View className="mb-6 flex-row items-center justify-between">
               <View className="flex-1">
                 <Text className="text-2xl font-bold text-foreground">
-                  {selectedExercise?.exerciseName}
+                  {selectedExercise &&
+                    getExerciseDisplayNameForStableId(selectedExercise.exerciseName, t)}
                 </Text>
                 <Text className="text-sm text-muted-foreground">{t('progressOverview')}</Text>
               </View>
@@ -1017,7 +1052,7 @@ export default function HistoryScreen() {
                               {formatDate(set.workout_date)} {t('at')} {formatTime(set.created_at)}
                             </Text>
                             <Text className="mt-1 text-xs text-muted-foreground">
-                              {set.exercise_category}
+                              {getCategoryDisplayName(set.exercise_category, t)}
                             </Text>
                           </View>
                           <Text className="text-lg font-bold text-primary">

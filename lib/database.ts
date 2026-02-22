@@ -1,5 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 
+import { getDefaultExerciseNameToKeyMap } from './i18n';
+
 // Database instance
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -19,6 +21,7 @@ export type Exercise = {
   name: string;
   category: string; // ТЯГИ, ЖИМЫ, НОГИ
   created_at: string;
+  i18n_key?: string | null; // when set, UI shows t(i18n_key) instead of name (default exercises)
 };
 
 export type WorkoutSet = {
@@ -37,7 +40,34 @@ export type SetWithDetails = WorkoutSet & {
   exercise_name: string;
   exercise_category: string;
   workout_date: string;
+  exercise_i18n_key?: string | null; // when set, UI shows t(exercise_i18n_key) instead of exercise_name
 };
+
+/** Display name for an exercise or set: translated if i18n_key set, else raw name. */
+export function getExerciseDisplayName(
+  name: string,
+  i18nKey: string | null | undefined,
+  t: (key: string) => string
+): string {
+  return i18nKey ? t(i18nKey) : name;
+}
+
+/** True if the value is a default-exercise stable id (i18n key), not a custom name. */
+export function isDefaultExerciseStableId(stableId: string): boolean {
+  return stableId.startsWith('defaultExercises.');
+}
+
+/** Display name when the identifier is a "stable id": i18n key for defaults, or custom name. */
+export function getExerciseDisplayNameForStableId(
+  stableId: string,
+  t: (key: string) => string
+): string {
+  return getExerciseDisplayName(
+    stableId,
+    isDefaultExerciseStableId(stableId) ? stableId : null,
+    t
+  );
+}
 
 // ============================================================================
 // Database Initialization
@@ -99,6 +129,31 @@ async function initializeSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_workouts_date ON workouts(date);
     CREATE INDEX IF NOT EXISTS idx_exercises_category ON exercises(category);
   `);
+
+  await migrateExerciseI18nKey();
+}
+
+/** Add i18n_key to exercises and backfill for existing default exercises (by name). */
+async function migrateExerciseI18nKey(): Promise<void> {
+  if (!db) {
+    return;
+  }
+  try {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN i18n_key TEXT');
+  } catch {
+    // Column already exists (e.g. after second app launch)
+  }
+  const nameToKey = getDefaultExerciseNameToKeyMap();
+  const rows = await db.getAllAsync<{ id: number; name: string }>(
+    'SELECT id, name FROM exercises WHERE i18n_key IS NULL'
+  );
+  for (const row of rows) {
+    const name = row.name?.trim() ?? '';
+    const key = nameToKey[name] || nameToKey[row.name];
+    if (key) {
+      await db.runAsync('UPDATE exercises SET i18n_key = ? WHERE id = ?', [key, row.id]);
+    }
+  }
 }
 
 // ============================================================================
@@ -263,6 +318,7 @@ export async function getSetsByWorkout(workoutId: number): Promise<SetWithDetail
       s.*,
       e.name as exercise_name,
       e.category as exercise_category,
+      e.i18n_key as exercise_i18n_key,
       w.date as workout_date
     FROM sets s
     JOIN exercises e ON s.exercise_id = e.id
@@ -282,6 +338,7 @@ export async function getSetsByExercise(exerciseId: number): Promise<SetWithDeta
       s.*,
       e.name as exercise_name,
       e.category as exercise_category,
+      e.i18n_key as exercise_i18n_key,
       w.date as workout_date
     FROM sets s
     JOIN exercises e ON s.exercise_id = e.id
@@ -300,6 +357,7 @@ export async function getAllSetsWithDetails(limit?: number): Promise<SetWithDeta
       s.*,
       e.name as exercise_name,
       e.category as exercise_category,
+      e.i18n_key as exercise_i18n_key,
       w.date as workout_date
     FROM sets s
     JOIN exercises e ON s.exercise_id = e.id
@@ -406,6 +464,7 @@ export async function getTodaySets(): Promise<SetWithDetails[]> {
       s.*,
       e.name as exercise_name,
       e.category as exercise_category,
+      e.i18n_key as exercise_i18n_key,
       w.date as workout_date
     FROM sets s
     JOIN exercises e ON s.exercise_id = e.id
@@ -531,6 +590,7 @@ export async function closeDatabase(): Promise<void> {
 export type DefaultExerciseDefinition = {
   name: string;
   category: string;
+  i18n_key: string; // e.g. 'defaultExercises.benchPress' so UI can show t(i18n_key)
 };
 
 export async function seedDefaultExercises(
@@ -547,10 +607,10 @@ export async function seedDefaultExercises(
       );
 
       if (!existing) {
-        await database.runAsync('INSERT INTO exercises (name, category) VALUES (?, ?)', [
-          exercise.name,
-          exercise.category,
-        ]);
+        await database.runAsync(
+          'INSERT INTO exercises (name, category, i18n_key) VALUES (?, ?, ?)',
+          [exercise.name, exercise.category, exercise.i18n_key]
+        );
         created++;
       }
     }

@@ -65,7 +65,13 @@ export function I18nProvider({ children }: I18nProviderProps) {
     [locale, setLocale, t]
   );
 
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+  // Key by locale so the entire tree remounts when language changes - guarantees
+  // all screens and the tab bar show the new translations (avoids stale closures / nav cache).
+  return (
+    <I18nContext.Provider value={value}>
+      <React.Fragment key={locale}>{children}</React.Fragment>
+    </I18nContext.Provider>
+  );
 }
 
 export function useI18n() {

@@ -15,6 +15,7 @@ import { Check, ChevronRight, Dumbbell, Edit, Plus, Trash2, X } from 'lucide-rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
+import { getCategoryDisplayName, getEnglishDefaultExerciseName } from '@/lib/i18n';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   createExercise,
@@ -22,6 +23,7 @@ import {
   deleteExercise,
   Exercise,
   getAllExercises,
+  getExerciseDisplayName,
   getCategories,
   hasExercises,
   seedDefaultExercises,
@@ -83,40 +85,34 @@ export default function SectionsScreen() {
     const presses = t('defaultSections.presses');
     const legs = t('defaultSections.legs');
 
+    const keysPulls = [
+      'upperPull', 'narrowGrip', 'lowerPull', 'dumbbellRow', 'pullover', 'deadlift',
+      'barbellCurl', 'extension', 'trapezius', 'pullUps', 'forearm',
+    ];
+    const keysPresses = [
+      'benchPress', 'inclineDumbbellPress', 'seatedPress', 'flyDumbbell', 'lateralRaise',
+      'pushdown', 'seatedFlye', 'rearDelt', 'dipsPause',
+    ];
+    const keysLegs = [
+      'squats', 'lunges', 'quadriceps', 'hamstring', 'hipAbduction', 'hipAdduction',
+      'calfRaise', 'cableSquat', 'legPress', 'gluteBridge',
+    ];
     return [
-      // PULLS / ТЯГИ
-      { name: t('defaultExercises.upperPull'), category: pulls },
-      { name: t('defaultExercises.narrowGrip'), category: pulls },
-      { name: t('defaultExercises.lowerPull'), category: pulls },
-      { name: t('defaultExercises.dumbbellRow'), category: pulls },
-      { name: t('defaultExercises.pullover'), category: pulls },
-      { name: t('defaultExercises.deadlift'), category: pulls },
-      { name: t('defaultExercises.barbellCurl'), category: pulls },
-      { name: t('defaultExercises.extension'), category: pulls },
-      { name: t('defaultExercises.trapezius'), category: pulls },
-      { name: t('defaultExercises.pullUps'), category: pulls },
-      { name: t('defaultExercises.forearm'), category: pulls },
-      // PRESSES / ЖИМЫ
-      { name: t('defaultExercises.benchPress'), category: presses },
-      { name: t('defaultExercises.inclineDumbbellPress'), category: presses },
-      { name: t('defaultExercises.seatedPress'), category: presses },
-      { name: t('defaultExercises.flyDumbbell'), category: presses },
-      { name: t('defaultExercises.lateralRaise'), category: presses },
-      { name: t('defaultExercises.pushdown'), category: presses },
-      { name: t('defaultExercises.seatedFlye'), category: presses },
-      { name: t('defaultExercises.rearDelt'), category: presses },
-      { name: t('defaultExercises.dipsPause'), category: presses },
-      // LEGS / НОГИ
-      { name: t('defaultExercises.squats'), category: legs },
-      { name: t('defaultExercises.lunges'), category: legs },
-      { name: t('defaultExercises.quadriceps'), category: legs },
-      { name: t('defaultExercises.hamstring'), category: legs },
-      { name: t('defaultExercises.hipAbduction'), category: legs },
-      { name: t('defaultExercises.hipAdduction'), category: legs },
-      { name: t('defaultExercises.calfRaise'), category: legs },
-      { name: t('defaultExercises.cableSquat'), category: legs },
-      { name: t('defaultExercises.legPress'), category: legs },
-      { name: t('defaultExercises.gluteBridge'), category: legs },
+      ...keysPulls.map((key) => ({
+        name: getEnglishDefaultExerciseName(key),
+        category: pulls,
+        i18n_key: `defaultExercises.${key}` as const,
+      })),
+      ...keysPresses.map((key) => ({
+        name: getEnglishDefaultExerciseName(key),
+        category: presses,
+        i18n_key: `defaultExercises.${key}` as const,
+      })),
+      ...keysLegs.map((key) => ({
+        name: getEnglishDefaultExerciseName(key),
+        category: legs,
+        i18n_key: `defaultExercises.${key}` as const,
+      })),
     ];
   };
 
@@ -300,7 +296,9 @@ export default function SectionsScreen() {
                   activeOpacity={0.7}
                 >
                   <View className="flex-1">
-                    <Text className="text-lg font-bold text-foreground">{section.name}</Text>
+                    <Text className="text-lg font-bold text-foreground">
+                      {getCategoryDisplayName(section.name, t)}
+                    </Text>
                     <Text className="mt-1 text-sm text-muted-foreground">
                       {exerciseCount}{' '}
                       {exerciseCount === 1
@@ -358,7 +356,9 @@ export default function SectionsScreen() {
                             key={exercise.id}
                             className="flex-row items-center justify-between rounded-lg border border-border bg-background p-3"
                           >
-                            <Text className="flex-1 text-foreground">{exercise.name}</Text>
+                            <Text className="flex-1 text-foreground">
+                                {getExerciseDisplayName(exercise.name, exercise.i18n_key ?? null, t)}
+                              </Text>
 
                             <View className="flex-row items-center gap-2">
                               <TouchableOpacity
