@@ -1,20 +1,18 @@
 import React from 'react';
-import { Alert, Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { useRouter } from 'expo-router';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  Bell,
-  Database,
-  Download,
-  FileText,
-  LogOut,
-  Settings,
-  Shield,
-  Trash2,
-  User,
-} from 'lucide-react-native';
+import { FileText, LogOut, Settings, Shield, Trash2, User } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/components/AuthProvider';
@@ -22,13 +20,54 @@ import { GoogleLogo } from '@/components/GoogleLogo';
 import { useI18n } from '@/components/I18nProvider';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { clearAllData } from '@/lib/database';
-import { getImportPreview, importTrainingsToDatabase } from '@/lib/importTrainings';
+import { clearAllData, getAllSetsWithDetails } from '@/lib/database';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user, isLoading, signOut, signInWithGoogle, isSigningIn } = useAuth();
+
+  const formatDateForCSV = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) {
+      return t('today');
+    }
+    if (date.toDateString() === yesterday.toDateString()) {
+      return t('yesterday');
+    }
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const handleExportData = async () => {
+    const sets = await getAllSetsWithDetails();
+    if (sets.length === 0) {
+      Alert.alert(t('noData'), t('noLogsToExport'));
+      return;
+    }
+    const headers = `${t('date')},${t('section')},${t('exercise')},${t('weight')} (kg),${t('reps')}\n`;
+    const rows = sets
+      .map(
+        (set) =>
+          `${formatDateForCSV(set.workout_date)},${set.exercise_category},${set.exercise_name},${set.weight},${set.reps}`
+      )
+      .join('\n');
+    const csv = headers + rows;
+    try {
+      await Share.share({
+        message: csv,
+        title: t('workoutHistoryExport'),
+      });
+    } catch {
+      Alert.alert(t('exportFailed'), t('couldNotExport'));
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(t('logout'), t('logoutConfirm'), [
@@ -70,43 +109,6 @@ export default function ProfileScreen() {
         },
       },
     ]);
-  };
-
-  const handleImportTrainings = () => {
-    try {
-      const preview = getImportPreview();
-      Alert.alert(
-        'Import Training Data',
-        `This will import:\n\n` +
-          `• ${preview.totalSessions} workout sessions\n` +
-          `• ${preview.totalSets} total sets\n` +
-          `• ${preview.uniqueExercises} unique exercises\n` +
-          `• Date range: ${preview.dateRange.from} - ${preview.dateRange.to}\n\n` +
-          `This will REPLACE your current workout data.`,
-        [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: 'Import',
-            onPress: async () => {
-              try {
-                const result = await importTrainingsToDatabase(true);
-                Alert.alert(
-                  'Import Complete!',
-                  `Successfully imported:\n` +
-                    `• ${result.workoutsCreated} workout sessions\n` +
-                    `• ${result.setsCreated} sets\n` +
-                    `• ${result.exercisesCreated} exercises`
-                );
-              } catch (error) {
-                Alert.alert('Import Failed', String(error));
-              }
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Preview Failed', String(error));
-    }
   };
 
   const navigateToLogin = () => {
@@ -202,17 +204,6 @@ export default function ProfileScreen() {
               <LanguageSelector />
 
               <TouchableOpacity
-                onPress={handleImportTrainings}
-                className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4"
-              >
-                <View className="flex-row items-center gap-3">
-                  <Download className="text-primary" size={20} />
-                  <Text className="text-foreground">Import Training Data</Text>
-                </View>
-                <Text className="text-sm text-primary">39 sessions</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 onPress={handleClearAllData}
                 className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4"
               >
@@ -280,22 +271,6 @@ export default function ProfileScreen() {
             </View>
 
             <LanguageSelector />
-
-            <View className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4 opacity-50">
-              <View className="flex-row items-center gap-3">
-                <Bell className="text-foreground" size={20} />
-                <Text className="text-foreground">{t('notifications')}</Text>
-              </View>
-              <Text className="text-sm text-muted-foreground">Soon</Text>
-            </View>
-
-            <View className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4 opacity-50">
-              <View className="flex-row items-center gap-3">
-                <Database className="text-foreground" size={20} />
-                <Text className="text-foreground">{t('units')}</Text>
-              </View>
-              <Text className="text-sm text-muted-foreground">Soon</Text>
-            </View>
           </View>
         </View>
 
@@ -305,23 +280,14 @@ export default function ProfileScreen() {
 
           <View className="mb-4 gap-2 overflow-hidden rounded-xl border border-border bg-card p-2">
             <TouchableOpacity
-              onPress={handleImportTrainings}
+              onPress={handleExportData}
               className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4"
             >
               <View className="flex-row items-center gap-3">
-                <Download className="text-primary" size={20} />
-                <Text className="text-foreground">Import Training Data</Text>
-              </View>
-              <Text className="text-sm text-primary">39 sessions</Text>
-            </TouchableOpacity>
-
-            <View className="flex-row items-center justify-between rounded-lg bg-muted/50 p-4 opacity-50">
-              <View className="flex-row items-center gap-3">
                 <FileText className="text-foreground" size={20} />
-                <Text className="text-foreground">Export Data</Text>
+                <Text className="text-foreground">{t('exportData')}</Text>
               </View>
-              <Text className="text-sm text-muted-foreground">Soon</Text>
-            </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleClearAllData}

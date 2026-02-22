@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
+import { makeRedirectUri } from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -47,13 +48,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Configure Google Auth Request
-  // For iOS, expo-auth-session automatically uses the reversed client ID as redirect
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-  });
+  // Configure Google Auth Request with a stable redirect URI (app scheme from app.json).
+  // Required: In Google Cloud Console, add this redirect to your Web client's "Authorized redirect URIs":
+  //   liftlog://redirect
+  // Use a development build (expo run:ios / expo run:android); Expo Go cannot use custom schemes for OAuth.
+  const [request, response, promptAsync] = Google.useAuthRequest(
+    {
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      iosClientId: GOOGLE_IOS_CLIENT_ID,
+      androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    },
+    { scheme: 'liftlog', path: 'redirect' }
+  );
 
   // Listen for Firebase auth state changes
   useEffect(() => {
