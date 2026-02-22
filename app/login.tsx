@@ -14,7 +14,7 @@ import { useI18n } from '@/components/I18nProvider';
 export default function LoginScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const { signInWithGoogle, isSigningIn, user } = useAuth();
+  const { signInWithGoogle, isSigningIn, isGoogleSignInReady, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -183,13 +183,13 @@ export default function LoginScreen() {
           {/* Google Sign-In Button */}
           <TouchableOpacity
             onPress={handleGoogleSignIn}
-            disabled={isSigningIn}
-            className={`mb-4 flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn ? 'opacity-50' : ''}`}
+            disabled={isSigningIn || !isGoogleSignInReady}
+                className={`mb-4 flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn || !isGoogleSignInReady ? 'opacity-50' : ''}`}
             style={{ elevation: 1 }}
           >
             <GoogleLogo size={20} />
             <Text className="text-base font-medium text-gray-700">
-              {isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+              {!isGoogleSignInReady ? t('loading') : isSigningIn ? t('signingIn') : t('continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 

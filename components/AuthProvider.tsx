@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { makeRedirectUri } from 'expo-auth-session';
+import { Alert, Platform } from 'react-native';
+
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -33,6 +34,7 @@ type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   isSigningIn: boolean;
+  isGoogleSignInReady: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -48,13 +50,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Google Auth: use native client IDs so redirect uses the iOS reversed client ID / Android app,
-  // not a custom scheme. Web client only accepts HTTPS redirects (no liftlog://).
-  // Use a development build (expo run:ios / expo run:android); Expo Go is not supported for OAuth.
+  // Pass redirectUri explicitly so the auth request always builds (avoids makeRedirectUri/env issues).
+  // Same value for iOS and Android; register in app.json (Android intent filter) and in Google Console.
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: GOOGLE_WEB_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    ...(Platform.OS !== 'web' && {
+      redirectUri: 'com.liftlog-app.app:/oauthredirect',
+    }),
   });
 
   // Listen for Firebase auth state changes
@@ -96,12 +100,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Public sign-in method
   const signInWithGoogle = async () => {
     if (!request) {
-      console.error('Google Auth request not ready');
+      Alert.alert(
+        'Sign-in not ready',
+        'Google sign-in is still loading. Wait a moment and try again.'
+      );
       return;
     }
 
     setIsSigningIn(true);
-    await promptAsync();
+    try {
+      await promptAsync();
+    } catch (err) {
+      console.error('Google prompt error:', err);
+      setIsSigningIn(false);
+      Alert.alert('Error', 'Could not open sign-in. Try again.');
+    }
   };
 
   // Sign out
@@ -119,6 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         isSigningIn,
+        isGoogleSignInReady: !!request,
         signInWithGoogle,
         signOut,
       }}

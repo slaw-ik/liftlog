@@ -25,7 +25,7 @@ import { clearAllData, getAllSetsWithDetails } from '@/lib/database';
 export default function ProfileScreen() {
   const router = useRouter();
   const { t, locale } = useI18n();
-  const { user, isLoading, signOut, signInWithGoogle, isSigningIn } = useAuth();
+  const { user, isLoading, signOut, signInWithGoogle, isSigningIn, isGoogleSignInReady } = useAuth();
 
   const formatDateForCSV = (dateString: string) => {
     const date = new Date(dateString);
@@ -151,13 +151,13 @@ export default function ProfileScreen() {
               {/* Google Sign-In Button */}
               <TouchableOpacity
                 onPress={handleGoogleSignIn}
-                disabled={isSigningIn}
-                className={`mb-3 w-full flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn ? 'opacity-50' : ''}`}
+                disabled={isSigningIn || !isGoogleSignInReady}
+                className={`mb-3 w-full flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn || !isGoogleSignInReady ? 'opacity-50' : ''}`}
                 style={{ elevation: 1 }}
               >
                 <GoogleLogo size={20} />
                 <Text className="text-base font-medium text-gray-700">
-                  {isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+                  {!isGoogleSignInReady ? t('loading') : isSigningIn ? t('signingIn') : t('continueWithGoogle')}
                 </Text>
               </TouchableOpacity>
 

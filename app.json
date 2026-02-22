@@ -23,6 +23,18 @@
     },
     "android": {
       "package": "com.liftlog-app.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "com.liftlog-app.app",
+              "pathPrefix": "/oauthredirect"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#84cc16",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
