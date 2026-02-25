@@ -197,6 +197,22 @@ const translations = {
     editSet: 'Edit Set',
     workoutHistoryExport: 'Workout History Export',
 
+    // Calendar month names (nominative: for "Month YYYY" header)
+    months: {
+      january: 'January',
+      february: 'February',
+      march: 'March',
+      april: 'April',
+      may: 'May',
+      june: 'June',
+      july: 'July',
+      august: 'August',
+      september: 'September',
+      october: 'October',
+      november: 'November',
+      december: 'December',
+    },
+
     // Profile Screen
     profileTitle: 'Profile',
     welcome: 'Welcome!',
@@ -486,6 +502,22 @@ const translations = {
     confirmDeleteWorkout: 'Вы уверены, что хотите удалить эту запись тренировки?',
     editSet: 'Изменить подход',
     workoutHistoryExport: 'Экспорт истории тренировок',
+
+    // Calendar month names (nominative: for "Month YYYY" header)
+    months: {
+      january: 'Январь',
+      february: 'Февраль',
+      march: 'Март',
+      april: 'Апрель',
+      may: 'Май',
+      june: 'Июнь',
+      july: 'Июль',
+      august: 'Август',
+      september: 'Сентябрь',
+      october: 'Октябрь',
+      november: 'Ноябрь',
+      december: 'Декабрь',
+    },
 
     // Profile Screen
     profileTitle: 'Профиль',
@@ -777,6 +809,22 @@ const translations = {
     confirmDeleteWorkout: 'Ви впевнені, що хочете видалити цей запис тренування?',
     editSet: 'Змінити підхід',
     workoutHistoryExport: 'Експорт історії тренувань',
+
+    // Calendar month names (nominative: for "Month YYYY" header)
+    months: {
+      january: 'Січень',
+      february: 'Лютий',
+      march: 'Березень',
+      april: 'Квітень',
+      may: 'Травень',
+      june: 'Червень',
+      july: 'Липень',
+      august: 'Серпень',
+      september: 'Вересень',
+      october: 'Жовтень',
+      november: 'Листопад',
+      december: 'Грудень',
+    },
 
     // Profile Screen
     profileTitle: 'Профіль',

@@ -61,6 +61,22 @@ const CHART_WIDTH = SCREEN_WIDTH - 64;
 
 const DATE_FNS_LOCALE: Record<string, typeof enUS> = { en: enUS, ru, uk };
 
+/** i18n keys for calendar header month names (nominative). */
+const CALENDAR_MONTH_KEYS = [
+  'months.january',
+  'months.february',
+  'months.march',
+  'months.april',
+  'months.may',
+  'months.june',
+  'months.july',
+  'months.august',
+  'months.september',
+  'months.october',
+  'months.november',
+  'months.december',
+] as const;
+
 /** Start of a week (Monday) for generating weekday labels in a given locale */
 const WEEK_START = new Date(2024, 0, 1); // Monday
 
@@ -282,27 +298,33 @@ export default function HistoryScreen() {
     return Array.from(exerciseSet).sort();
   }, [allSets]);
 
-  const getExerciseProgress = useCallback((exerciseStableId: string): ExerciseProgress => {
-    const exerciseSets = allSets.filter(
-      (set) => (set.exercise_i18n_key ?? set.exercise_name) === exerciseStableId
-    );
-    const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
-    const maxE1RM = Math.max(...exerciseSets.map((set) => calculateE1RM(set.weight, set.reps)), 0);
-    const totalSets = exerciseSets.length;
-    const avgReps =
-      totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
+  const getExerciseProgress = useCallback(
+    (exerciseStableId: string): ExerciseProgress => {
+      const exerciseSets = allSets.filter(
+        (set) => (set.exercise_i18n_key ?? set.exercise_name) === exerciseStableId
+      );
+      const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
+      const maxE1RM = Math.max(
+        ...exerciseSets.map((set) => calculateE1RM(set.weight, set.reps)),
+        0
+      );
+      const totalSets = exerciseSets.length;
+      const avgReps =
+        totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
 
-    return {
-      exerciseName: exerciseStableId,
-      sets: exerciseSets.sort(
-        (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
-      ),
-      maxWeight,
-      maxE1RM: Math.round(maxE1RM * 10) / 10,
-      totalSets,
-      avgReps: Math.round(avgReps * 10) / 10,
-    };
-  }, [allSets]);
+      return {
+        exerciseName: exerciseStableId,
+        sets: exerciseSets.sort(
+          (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
+        ),
+        maxWeight,
+        maxE1RM: Math.round(maxE1RM * 10) / 10,
+        totalSets,
+        avgReps: Math.round(avgReps * 10) / 10,
+      };
+    },
+    [allSets]
+  );
 
   const viewExerciseProgress = useCallback(
     (exerciseStableId: string) => {
@@ -540,6 +562,8 @@ export default function HistoryScreen() {
     [calendarMonth]
   );
 
+  const todayDateString = new Date().toDateString();
+
   // Show loading indicator on initial load
   if (isLoading) {
     return (
@@ -716,7 +740,7 @@ export default function HistoryScreen() {
                     <ChevronLeft size={24} color={chartColors.text} />
                   </TouchableOpacity>
                   <Text className="text-base font-semibold text-foreground">
-                    {format(calendarMonth, 'MMMM yyyy', { locale: dateFnsLocale })}
+                    {t(CALENDAR_MONTH_KEYS[calendarMonth.getMonth()])} {calendarMonth.getFullYear()}
                   </Text>
                   <TouchableOpacity
                     onPress={() => setCalendarMonth((m) => addMonths(m, 1))}
@@ -737,6 +761,7 @@ export default function HistoryScreen() {
                     const hasWorkout = daysWithWorkouts.has(dayStr);
                     const isSelected = selectedDate === dayStr;
                     const isCurrentMonth = isSameMonth(day, calendarMonth);
+                    const isToday = dayStr === todayDateString;
                     return (
                       <TouchableOpacity
                         key={dayStr}
@@ -758,8 +783,12 @@ export default function HistoryScreen() {
                               : hasWorkout
                                 ? chartColors.primary + '55'
                                 : 'transparent',
-                            borderWidth: isSelected ? 2 : 0,
-                            borderColor: isSelected ? chartColors.primaryDark : 'transparent',
+                            borderWidth: isSelected ? 2 : isToday ? 1.5 : 0,
+                            borderColor: isSelected
+                              ? chartColors.primaryDark
+                              : isToday
+                                ? chartColors.primary
+                                : 'transparent',
                             opacity: isCurrentMonth ? 1 : 0.35,
                           }}
                         >
@@ -773,8 +802,8 @@ export default function HistoryScreen() {
                                   : chartColors.textMuted,
                             }}
                           >
-                          {format(day, 'd')}
-                        </Text>
+                            {format(day, 'd')}
+                          </Text>
                         </View>
                       </TouchableOpacity>
                     );
