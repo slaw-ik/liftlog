@@ -6,7 +6,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   Text,
   TouchableOpacity,
   View,
@@ -14,14 +13,28 @@ import {
 
 import { useFocusEffect } from '@react-navigation/native';
 import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from 'date-fns';
+import { enUS, ru, uk } from 'date-fns/locale';
+import {
   Activity,
   Calendar,
-  Download,
+  ChevronLeft,
+  ChevronRight,
   Edit,
   Filter,
   LineChart,
-  TrendingUp,
   Trash2,
+  TrendingUp,
   X,
 } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
@@ -29,7 +42,6 @@ import { LineChart as GiftedLineChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
-import { getCategoryDisplayName } from '@/lib/i18n';
 import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -42,9 +54,15 @@ import {
   updateSet,
 } from '@/lib/database';
 import { calculateE1RM, getProgressValue, ProgressMetric } from '@/lib/fitness';
+import { getCategoryDisplayName } from '@/lib/i18n';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 64;
+
+const DATE_FNS_LOCALE: Record<string, typeof enUS> = { en: enUS, ru, uk };
+
+/** Start of a week (Monday) for generating weekday labels in a given locale */
+const WEEK_START = new Date(2024, 0, 1); // Monday
 
 // Types for UI
 type ExerciseProgress = {
@@ -153,6 +171,11 @@ export default function HistoryScreen() {
   const [selectedChartExercise, setSelectedChartExercise] = useState<string>('all');
   const [progressMetric, setProgressMetric] = useState<ProgressMetric>('e1rm');
 
+  // View mode: progress chart vs calendar (default calendar)
+  const [viewMode, setViewMode] = useState<'progress' | 'calendar'>('calendar');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+
   // Filter states
   const [filterSection, setFilterSection] = useState<string>('all');
   const [filterExercise, setFilterExercise] = useState<string>('all');
@@ -174,6 +197,7 @@ export default function HistoryScreen() {
   const chartColors = useMemo(
     () => ({
       primary: isDark ? '#A3E635' : '#84CC16',
+      primaryDark: isDark ? '#84CC16' : '#65A30D', // darker green for selected-day ring
       secondary: isDark ? '#2DD4BF' : '#14B8A6',
       text: isDark ? '#FAFAFA' : '#0F0F0F',
       textMuted: isDark ? '#94A3B8' : '#64748B',
@@ -242,12 +266,7 @@ export default function HistoryScreen() {
 
   // Single source of truth: derive filteredSets from allSets + filter state (fixes new sets not showing)
   useEffect(() => {
-    const filtered = applyFiltersToSets(
-      allSets,
-      filterSection,
-      filterExercise,
-      filterDateRange
-    );
+    const filtered = applyFiltersToSets(allSets, filterSection, filterExercise, filterDateRange);
     setFilteredSets(filtered);
   }, [allSets, filterSection, filterExercise, filterDateRange, applyFiltersToSets]);
 
@@ -263,7 +282,7 @@ export default function HistoryScreen() {
     return Array.from(exerciseSet).sort();
   }, [allSets]);
 
-  const getExerciseProgress = (exerciseStableId: string): ExerciseProgress => {
+  const getExerciseProgress = useCallback((exerciseStableId: string): ExerciseProgress => {
     const exerciseSets = allSets.filter(
       (set) => (set.exercise_i18n_key ?? set.exercise_name) === exerciseStableId
     );
@@ -283,7 +302,7 @@ export default function HistoryScreen() {
       totalSets,
       avgReps: Math.round(avgReps * 10) / 10,
     };
-  };
+  }, [allSets]);
 
   const viewExerciseProgress = useCallback(
     (exerciseStableId: string) => {
@@ -291,34 +310,8 @@ export default function HistoryScreen() {
       setSelectedExercise(progress);
       setShowProgressModal(true);
     },
-    [allSets]
+    [getExerciseProgress]
   );
-
-  const exportToCSV = async () => {
-    if (filteredSets.length === 0) {
-      Alert.alert(t('noData'), t('noLogsToExport'));
-      return;
-    }
-
-    const headers = `${t('date')},${t('section')},${t('exercise')},${t('weight')} (kg),${t('reps')}\n`;
-    const rows = filteredSets
-      .map(
-        (set) =>
-          `${formatDate(set.workout_date)},${set.exercise_category},${set.exercise_name},${set.weight},${set.reps}`
-      )
-      .join('\n');
-
-    const csv = headers + rows;
-
-    try {
-      await Share.share({
-        message: csv,
-        title: t('workoutHistoryExport'),
-      });
-    } catch (error) {
-      Alert.alert(t('exportFailed'), t('couldNotExport'));
-    }
-  };
 
   const handleDeleteSet = useCallback(
     (setId: number) => {
@@ -386,29 +379,35 @@ export default function HistoryScreen() {
     }
   }, [editingSet, editWeight, editReps, isSavingEdit, t, loadData, closeEditSet]);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+  const formatDate = useCallback(
+    (dateString: string) => {
+      const date = new Date(dateString);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
-      return t('today');
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return t('yesterday');
-    } else {
+      if (date.toDateString() === today.toDateString()) {
+        return t('today');
+      }
+      if (date.toDateString() === yesterday.toDateString()) {
+        return t('yesterday');
+      }
       return date.toLocaleDateString(locale, {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
       });
-    }
-  };
+    },
+    [t, locale]
+  );
 
-  const formatShortDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
-  };
+  const formatShortDate = useCallback(
+    (dateString: string) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    },
+    [locale]
+  );
 
   const formatTime = useCallback(
     (dateString: string) => {
@@ -430,9 +429,24 @@ export default function HistoryScreen() {
     });
   }, []);
 
+  // Days that have at least one set (for calendar highlighting)
+  const daysWithWorkouts = useMemo(() => {
+    const set = new Set<string>();
+    filteredSets.forEach((s) => set.add(new Date(s.workout_date).toDateString()));
+    return set;
+  }, [filteredSets]);
+
+  // When a day is selected in calendar, show only that day in the list; otherwise all
+  const setsForList = useMemo(() => {
+    if (!selectedDate) {
+      return filteredSets;
+    }
+    return filteredSets.filter((set) => new Date(set.workout_date).toDateString() === selectedDate);
+  }, [filteredSets, selectedDate]);
+
   const groupedSets = useMemo(() => {
     const grouped: { [key: string]: SetWithDetails[] } = {};
-    filteredSets.forEach((set) => {
+    setsForList.forEach((set) => {
       const dateKey = new Date(set.workout_date).toDateString();
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
@@ -446,7 +460,7 @@ export default function HistoryScreen() {
       );
     });
     return grouped;
-  }, [filteredSets]);
+  }, [setsForList]);
 
   // Generate exercise progression data based on selected metric
   const getExerciseChartData = useMemo(() => {
@@ -455,9 +469,7 @@ export default function HistoryScreen() {
     }
 
     const exerciseSets = allSets
-      .filter(
-        (set) => (set.exercise_i18n_key ?? set.exercise_name) === selectedChartExercise
-      )
+      .filter((set) => (set.exercise_i18n_key ?? set.exercise_name) === selectedChartExercise)
       .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
       .slice(-15);
 
@@ -469,7 +481,7 @@ export default function HistoryScreen() {
         dataPointText: `${Math.round(value)}`,
       };
     });
-  }, [selectedChartExercise, allSets, progressMetric]);
+  }, [selectedChartExercise, allSets, progressMetric, formatShortDate]);
 
   // Progress modal chart data
   const getProgressChartData = useMemo(() => {
@@ -485,7 +497,7 @@ export default function HistoryScreen() {
         dataPointText: `${value}`,
       };
     });
-  }, [selectedExercise, progressMetric]);
+  }, [selectedExercise, progressMetric, formatShortDate]);
 
   const dateKeys = useMemo(() => Object.keys(groupedSets), [groupedSets]);
 
@@ -504,6 +516,28 @@ export default function HistoryScreen() {
       (filterExercise !== 'all' ? 1 : 0) +
       (filterDateRange !== 'all' ? 1 : 0),
     [filterSection, filterExercise, filterDateRange]
+  );
+
+  const dateFnsLocale = useMemo(
+    () => DATE_FNS_LOCALE[locale?.slice(0, 2) ?? 'en'] ?? enUS,
+    [locale]
+  );
+
+  const calendarWeekdayLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) =>
+        format(addDays(WEEK_START, i), 'EEE', { locale: dateFnsLocale })
+      ),
+    [dateFnsLocale]
+  );
+
+  const calendarDays = useMemo(
+    () =>
+      eachDayOfInterval({
+        start: startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 }),
+        end: endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 }),
+      }),
+    [calendarMonth]
   );
 
   // Show loading indicator on initial load
@@ -570,35 +604,35 @@ export default function HistoryScreen() {
             </View>
           )}
 
-        {/* Progress chart by exercise */}
-        {allSets.length > 0 && (
-          <View className="mb-4 px-6">
-            <Text className="mb-2 text-lg font-semibold text-foreground">{t('progress')}</Text>
-            <View className="rounded-2xl border border-border bg-card p-4">
-              <View>
-                {/* Exercise selector + Est. 1RM line chart */}
-                <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{ gap: 6, marginBottom: 12 }}
-                    >
-                      {exercises.map((exercise) => {
-                        const isSelected = selectedChartExercise === exercise;
-                        return (
-                          <TouchableOpacity
-                            key={`${exercise}-${isSelected}`}
-                            onPress={() => setSelectedChartExercise(exercise)}
-                            activeOpacity={0.7}
-                            style={{
-                              backgroundColor: isSelected ? chartColors.primary : chartColors.card,
-                              borderColor: isSelected ? chartColors.primary : chartColors.grid,
-                              borderWidth: 1.5,
-                              borderRadius: 9999,
-                              paddingHorizontal: 12,
-                              paddingVertical: 6,
-                            }}
-                          >
-                        <Text
+          {/* Progress chart by exercise - only when viewMode is progress */}
+          {allSets.length > 0 && viewMode === 'progress' && (
+            <View className="mb-4 px-6">
+              <Text className="mb-2 text-lg font-semibold text-foreground">{t('progress')}</Text>
+              <View className="rounded-2xl border border-border bg-card p-4">
+                <View>
+                  {/* Exercise selector + Est. 1RM line chart */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, marginBottom: 12 }}
+                  >
+                    {exercises.map((exercise) => {
+                      const isSelected = selectedChartExercise === exercise;
+                      return (
+                        <TouchableOpacity
+                          key={exercise}
+                          onPress={() => setSelectedChartExercise(exercise)}
+                          activeOpacity={0.7}
+                          style={{
+                            backgroundColor: isSelected ? chartColors.primary : chartColors.card,
+                            borderColor: isSelected ? chartColors.primary : chartColors.grid,
+                            borderWidth: 1.5,
+                            borderRadius: 9999,
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text
                             style={{
                               color: isSelected ? '#0f0f0f' : chartColors.text,
                               fontSize: 12,
@@ -607,68 +641,158 @@ export default function HistoryScreen() {
                           >
                             {getExerciseDisplayNameForStableId(exercise, t)}
                           </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
 
-                    {selectedChartExercise && getExerciseChartData.length > 0 ? (
-                      <>
-                        <Text className="mb-1 text-xs text-muted-foreground">
-                          {getExerciseDisplayNameForStableId(selectedChartExercise, t)}{' '}
-                          · {t('estimated1RM')}
-                        </Text>
-                        <View style={{ marginLeft: -10 }}>
-                          <GiftedLineChart
-                            data={getExerciseChartData}
-                            width={CHART_WIDTH - 20}
-                            height={200}
-                            spacing={40}
-                            thickness={2}
-                            color={chartColors.primary}
-                            dataPointsColor={chartColors.primary}
-                            dataPointsRadius={4}
-                            noOfSections={4}
-                            yAxisThickness={0}
-                            xAxisThickness={1}
-                            xAxisColor={chartColors.grid}
-                            rulesColor={chartColors.grid}
-                            rulesType="solid"
-                            xAxisLabelTextStyle={{
-                              color: chartColors.textMuted,
-                              fontSize: 9,
-                              width: 40,
-                              textAlign: 'center',
-                            }}
-                            yAxisTextStyle={{
-                              color: chartColors.textMuted,
-                              fontSize: 10,
-                            }}
-                            hideDataPoints={false}
-                            curved
-                            isAnimated={false}
-                            areaChart
-                            startFillColor={chartColors.primary}
-                            endFillColor={chartColors.background}
-                            startOpacity={0.2}
-                            endOpacity={0.02}
-                          />
-                        </View>
-                      </>
-                    ) : (
-                      <View className="h-32 items-center justify-center">
-                        <LineChart size={28} color={chartColors.textMuted} />
-                        <Text className="mt-2 text-center text-sm text-muted-foreground">
-                          {t('pickExercise')}
-                        </Text>
+                  {selectedChartExercise && getExerciseChartData.length > 0 ? (
+                    <>
+                      <Text className="mb-1 text-xs text-muted-foreground">
+                        {getExerciseDisplayNameForStableId(selectedChartExercise, t)} ·{' '}
+                        {t('estimated1RM')}
+                      </Text>
+                      <View style={{ marginLeft: -10 }}>
+                        <GiftedLineChart
+                          data={getExerciseChartData}
+                          width={CHART_WIDTH - 20}
+                          height={200}
+                          spacing={40}
+                          thickness={2}
+                          color={chartColors.primary}
+                          dataPointsColor={chartColors.primary}
+                          dataPointsRadius={4}
+                          noOfSections={4}
+                          yAxisThickness={0}
+                          xAxisThickness={1}
+                          xAxisColor={chartColors.grid}
+                          rulesColor={chartColors.grid}
+                          rulesType="solid"
+                          xAxisLabelTextStyle={{
+                            color: chartColors.textMuted,
+                            fontSize: 9,
+                            width: 40,
+                            textAlign: 'center',
+                          }}
+                          yAxisTextStyle={{
+                            color: chartColors.textMuted,
+                            fontSize: 10,
+                          }}
+                          hideDataPoints={false}
+                          curved
+                          isAnimated={false}
+                          areaChart
+                          startFillColor={chartColors.primary}
+                          endFillColor={chartColors.background}
+                          startOpacity={0.2}
+                          endOpacity={0.02}
+                        />
                       </View>
-                    )}
+                    </>
+                  ) : (
+                    <View className="h-32 items-center justify-center">
+                      <LineChart size={28} color={chartColors.textMuted} />
+                      <Text className="mt-2 text-center text-sm text-muted-foreground">
+                        {t('pickExercise')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Action Buttons - only show when there's data */}
+          {/* Calendar - only when viewMode is calendar */}
+          {allSets.length > 0 && viewMode === 'calendar' && (
+            <View className="mb-4 px-6">
+              <Text className="mb-2 text-lg font-semibold text-foreground">{t('calendar')}</Text>
+              <View className="rounded-2xl border border-border bg-card p-4">
+                <View className="mb-3 flex-row items-center justify-between">
+                  <TouchableOpacity
+                    onPress={() => setCalendarMonth((m) => subMonths(m, 1))}
+                    className="rounded-full p-2"
+                    hitSlop={12}
+                  >
+                    <ChevronLeft size={24} color={chartColors.text} />
+                  </TouchableOpacity>
+                  <Text className="text-base font-semibold text-foreground">
+                    {format(calendarMonth, 'MMMM yyyy', { locale: dateFnsLocale })}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setCalendarMonth((m) => addMonths(m, 1))}
+                    className="rounded-full p-2"
+                    hitSlop={12}
+                  >
+                    <ChevronRight size={24} color={chartColors.text} />
+                  </TouchableOpacity>
+                </View>
+                <View className="flex-row flex-wrap">
+                  {calendarWeekdayLabels.map((label, i) => (
+                    <View key={`weekday-${i}`} className="w-[14.28%] items-center pb-1">
+                      <Text className="text-xs font-medium text-muted-foreground">{label}</Text>
+                    </View>
+                  ))}
+                  {calendarDays.map((day) => {
+                    const dayStr = day.toDateString();
+                    const hasWorkout = daysWithWorkouts.has(dayStr);
+                    const isSelected = selectedDate === dayStr;
+                    const isCurrentMonth = isSameMonth(day, calendarMonth);
+                    return (
+                      <TouchableOpacity
+                        key={dayStr}
+                        onPress={() => {
+                          const next = selectedDate === dayStr ? null : dayStr;
+                          setSelectedDate(next);
+                          if (next && !isSameMonth(day, calendarMonth)) {
+                            setCalendarMonth(new Date(day));
+                          }
+                        }}
+                        activeOpacity={0.7}
+                        className="aspect-square w-[14.28%] items-center justify-center py-0.5"
+                      >
+                        <View
+                          className="min-h-[32px] min-w-[32px] items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: isSelected
+                              ? chartColors.primary
+                              : hasWorkout
+                                ? chartColors.primary + '55'
+                                : 'transparent',
+                            borderWidth: isSelected ? 2 : 0,
+                            borderColor: isSelected ? chartColors.primaryDark : 'transparent',
+                            opacity: isCurrentMonth ? 1 : 0.35,
+                          }}
+                        >
+                          <Text
+                            className="text-sm font-medium"
+                            style={{
+                              color: isSelected
+                                ? '#0f0f0f'
+                                : isCurrentMonth
+                                  ? chartColors.text
+                                  : chartColors.textMuted,
+                            }}
+                          >
+                          {format(day, 'd')}
+                        </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {selectedDate !== null && (
+                  <TouchableOpacity
+                    onPress={() => setSelectedDate(null)}
+                    className="mt-3 self-center rounded-full border border-border bg-muted/50 px-4 py-2"
+                  >
+                    <Text className="text-sm font-medium text-foreground">{t('allDays')}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Action Buttons - only show when there's data */}
           {allSets.length > 0 && (
             <View className="flex-row gap-3 px-6 pb-4">
               <TouchableOpacity
@@ -681,58 +805,93 @@ export default function HistoryScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={exportToCSV}
-                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3"
+                onPress={() => setViewMode('progress')}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${
+                  viewMode === 'progress' ? 'bg-primary' : 'border border-border bg-card'
+                }`}
               >
-                <Download className="text-primary-foreground" size={18} />
-                <Text className="font-medium text-primary-foreground">{t('exportCSV')}</Text>
+                <TrendingUp
+                  size={18}
+                  color={viewMode === 'progress' ? chartColors.background : chartColors.text}
+                />
+                <Text
+                  className={`font-medium ${
+                    viewMode === 'progress' ? 'text-primary-foreground' : 'text-foreground'
+                  }`}
+                >
+                  {t('progress')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setViewMode('calendar')}
+                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${
+                  viewMode === 'calendar' ? 'bg-primary' : 'border border-border bg-card'
+                }`}
+              >
+                <Calendar
+                  size={18}
+                  color={viewMode === 'calendar' ? chartColors.background : chartColors.text}
+                />
+                <Text
+                  className={`font-medium ${
+                    viewMode === 'calendar' ? 'text-primary-foreground' : 'text-foreground'
+                  }`}
+                >
+                  {t('calendar')}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
 
           {/* Workout History List */}
           <View className="px-6">
-            {filteredSets.length === 0 ? (
+            {setsForList.length === 0 ? (
               <View className="items-center py-16">
                 <Calendar className="mb-4 text-muted-foreground" size={48} />
                 <Text className="text-center text-xl font-bold text-foreground">
-                  {t('noWorkoutsYet')}
+                  {selectedDate ? t('noWorkoutsOnThisDay') : t('noWorkoutsYet')}
                 </Text>
-                <Text className="mt-2 text-center text-muted-foreground">
-                  {activeFiltersCount > 0 ? t('noWorkoutsMatchFilters') : t('startLoggingWorkouts')}
-                </Text>
+                {!selectedDate && (
+                  <Text className="mt-2 text-center text-muted-foreground">
+                    {activeFiltersCount > 0
+                      ? t('noWorkoutsMatchFilters')
+                      : t('startLoggingWorkouts')}
+                  </Text>
+                )}
               </View>
             ) : (
-              dateKeys.map((dateKey) => {
-                const dateSets = groupedSets[dateKey];
-                const firstSet = dateSets[0];
-                const displayDate = formatDate(firstSet.workout_date);
+              dateKeys
+                .filter((dateKey) => (groupedSets[dateKey]?.length ?? 0) > 0)
+                .map((dateKey) => {
+                  const dateSets = groupedSets[dateKey];
+                  const firstSet = dateSets![0];
+                  const displayDate = formatDate(firstSet.workout_date);
 
-                return (
-                  <View key={dateKey} className="mb-6">
-                    <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
+                  return (
+                    <View key={dateKey} className="mb-6">
+                      <Text className="mb-3 text-lg font-bold text-foreground">{displayDate}</Text>
 
-                    <View className="gap-3">
-                      {dateSets.map((set) => (
-                        <SetItem
-                          key={set.id}
-                          set={set}
-                          isExpanded={expandedLogs.has(set.id)}
-                          onToggle={() => toggleLogExpansion(set.id)}
-                          onEdit={() => openEditSet(set)}
-                          onViewProgress={() =>
-                            viewExerciseProgress(set.exercise_i18n_key ?? set.exercise_name)
-                          }
-                          onDelete={() => handleDeleteSet(set.id)}
-                          t={t}
-                          formatTime={formatTime}
-                          iconColors={ACTION_COLORS[isDark ? 'dark' : 'light']}
-                        />
-                      ))}
+                      <View className="gap-3">
+                        {dateSets.map((set) => (
+                          <SetItem
+                            key={set.id}
+                            set={set}
+                            isExpanded={expandedLogs.has(set.id)}
+                            onToggle={() => toggleLogExpansion(set.id)}
+                            onEdit={() => openEditSet(set)}
+                            onViewProgress={() =>
+                              viewExerciseProgress(set.exercise_i18n_key ?? set.exercise_name)
+                            }
+                            onDelete={() => handleDeleteSet(set.id)}
+                            t={t}
+                            formatTime={formatTime}
+                            iconColors={ACTION_COLORS[isDark ? 'dark' : 'light']}
+                          />
+                        ))}
+                      </View>
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })
             )}
           </View>
         </Pressable>
