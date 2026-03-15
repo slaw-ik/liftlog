@@ -22,7 +22,7 @@
       }
     },
     "android": {
-      "package": "com.liftlog-app.app",
+      "package": "com.liftlog",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -32,7 +32,10 @@
               "pathPrefix": "/oauthredirect"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -67,6 +70,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b979953a-86e8-478e-8860-6cddc4842f32"
+      }
     }
   }
 }
