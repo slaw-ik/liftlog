@@ -676,7 +676,7 @@ export default function HistoryScreen() {
                         {getExerciseDisplayNameForStableId(selectedChartExercise, t)} ·{' '}
                         {t('estimated1RM')}
                       </Text>
-                      <View style={{ marginLeft: -10 }}>
+                      <View style={{ marginLeft: -10, overflow: 'hidden' }}>
                         <GiftedLineChart
                           data={getExerciseChartData}
                           width={CHART_WIDTH - 20}
@@ -1187,7 +1187,7 @@ export default function HistoryScreen() {
                     <Text className="mb-4 text-lg font-bold text-foreground">
                       {t('weightProgress')}
                     </Text>
-                    <View style={{ marginLeft: -10 }}>
+                    <View style={{ marginLeft: -10, overflow: 'hidden' }}>
                       <GiftedLineChart
                         data={getProgressChartData}
                         width={CHART_WIDTH - 40}
