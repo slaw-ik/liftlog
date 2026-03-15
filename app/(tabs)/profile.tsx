@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  Alert,
-  Image,
-  ScrollView,
-  Share,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Image, ScrollView, Share, Text, TouchableOpacity, View } from 'react-native';
 
 import { useRouter } from 'expo-router';
 
@@ -25,7 +17,8 @@ import { clearAllData, getAllSetsWithDetails } from '@/lib/database';
 export default function ProfileScreen() {
   const router = useRouter();
   const { t, locale } = useI18n();
-  const { user, isLoading, signOut, signInWithGoogle, isSigningIn, isGoogleSignInReady } = useAuth();
+  const { user, isLoading, signOut, signInWithGoogle, isSigningIn, isGoogleSignInReady } =
+    useAuth();
 
   const formatDateForCSV = (dateString: string) => {
     const date = new Date(dateString);
@@ -157,7 +150,11 @@ export default function ProfileScreen() {
               >
                 <GoogleLogo size={20} />
                 <Text className="text-base font-medium text-gray-700">
-                  {!isGoogleSignInReady ? t('loading') : isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+                  {!isGoogleSignInReady
+                    ? t('loading')
+                    : isSigningIn
+                      ? t('signingIn')
+                      : t('continueWithGoogle')}
                 </Text>
               </TouchableOpacity>
 

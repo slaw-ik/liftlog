@@ -213,6 +213,8 @@ export default function HistoryScreen() {
   const chartColors = useMemo(
     () => ({
       primary: isDark ? '#A3E635' : '#84CC16',
+      primaryForeground: isDark ? '#0A0A0A' : '#0F0F0F',
+      primaryAlpha: isDark ? '#A3E63555' : '#84CC1655',
       primaryDark: isDark ? '#84CC16' : '#65A30D', // darker green for selected-day ring
       secondary: isDark ? '#2DD4BF' : '#14B8A6',
       text: isDark ? '#FAFAFA' : '#0F0F0F',
@@ -265,14 +267,10 @@ export default function HistoryScreen() {
       }
 
       if (dateRange !== 'all') {
-        const now = new Date();
-        const cutoffDate = new Date();
-        if (dateRange === 'week') {
-          cutoffDate.setDate(now.getDate() - 7);
-        } else if (dateRange === 'month') {
-          cutoffDate.setDate(now.getDate() - 30);
-        }
-        filtered = filtered.filter((set) => new Date(set.workout_date) >= cutoffDate);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - (dateRange === 'week' ? 7 : 30));
+        const cutoffStr = format(cutoff, 'yyyy-MM-dd');
+        filtered = filtered.filter((set) => set.workout_date >= cutoffStr);
       }
 
       return filtered;
@@ -292,31 +290,40 @@ export default function HistoryScreen() {
     setFilterDateRange('all');
   };
 
+  // Ordered by most recent use; scoped to filteredSets so only in-range exercises appear.
+  // filteredSets preserves the DB order (workout_date DESC), so first occurrence = most recent.
   const exercises = useMemo(() => {
-    const exerciseSet = new Set<string>();
-    allSets.forEach((set) => exerciseSet.add(set.exercise_i18n_key ?? set.exercise_name));
-    return Array.from(exerciseSet).sort();
-  }, [allSets]);
+    const seen = new Set<string>();
+    for (const set of filteredSets) {
+      seen.add(set.exercise_i18n_key ?? set.exercise_name);
+    }
+    return Array.from(seen);
+  }, [filteredSets]);
 
   const getExerciseProgress = useCallback(
     (exerciseStableId: string): ExerciseProgress => {
       const exerciseSets = allSets.filter(
         (set) => (set.exercise_i18n_key ?? set.exercise_name) === exerciseStableId
       );
-      const maxWeight = Math.max(...exerciseSets.map((set) => set.weight), 0);
-      const maxE1RM = Math.max(
-        ...exerciseSets.map((set) => calculateE1RM(set.weight, set.reps)),
-        0
-      );
+      let maxWeight = 0;
+      let maxE1RM = 0;
+      let totalReps = 0;
+      for (const set of exerciseSets) {
+        if (set.weight > maxWeight) {
+          maxWeight = set.weight;
+        }
+        const e1rm = calculateE1RM(set.weight, set.reps);
+        if (e1rm > maxE1RM) {
+          maxE1RM = e1rm;
+        }
+        totalReps += set.reps;
+      }
       const totalSets = exerciseSets.length;
-      const avgReps =
-        totalSets > 0 ? exerciseSets.reduce((sum, set) => sum + set.reps, 0) / totalSets : 0;
+      const avgReps = totalSets > 0 ? totalReps / totalSets : 0;
 
       return {
         exerciseName: exerciseStableId,
-        sets: exerciseSets.sort(
-          (a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime()
-        ),
+        sets: exerciseSets.sort((a, b) => (a.workout_date < b.workout_date ? -1 : 1)),
         maxWeight,
         maxE1RM: Math.round(maxE1RM * 10) / 10,
         totalSets,
@@ -454,7 +461,7 @@ export default function HistoryScreen() {
   // Days that have at least one set (for calendar highlighting)
   const daysWithWorkouts = useMemo(() => {
     const set = new Set<string>();
-    filteredSets.forEach((s) => set.add(new Date(s.workout_date).toDateString()));
+    filteredSets.forEach((s) => set.add(s.workout_date));
     return set;
   }, [filteredSets]);
 
@@ -463,13 +470,13 @@ export default function HistoryScreen() {
     if (!selectedDate) {
       return filteredSets;
     }
-    return filteredSets.filter((set) => new Date(set.workout_date).toDateString() === selectedDate);
+    return filteredSets.filter((set) => set.workout_date === selectedDate);
   }, [filteredSets, selectedDate]);
 
   const groupedSets = useMemo(() => {
     const grouped: { [key: string]: SetWithDetails[] } = {};
     setsForList.forEach((set) => {
-      const dateKey = new Date(set.workout_date).toDateString();
+      const dateKey = set.workout_date;
       if (!grouped[dateKey]) {
         grouped[dateKey] = [];
       }
@@ -477,9 +484,7 @@ export default function HistoryScreen() {
     });
     // Within each day, show most recent sets first (last logged at top)
     Object.keys(grouped).forEach((key) => {
-      grouped[key].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      grouped[key].sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
     });
     return grouped;
   }, [setsForList]);
@@ -492,7 +497,7 @@ export default function HistoryScreen() {
 
     const exerciseSets = allSets
       .filter((set) => (set.exercise_i18n_key ?? set.exercise_name) === selectedChartExercise)
-      .sort((a, b) => new Date(a.workout_date).getTime() - new Date(b.workout_date).getTime())
+      .sort((a, b) => (a.workout_date < b.workout_date ? -1 : 1))
       .slice(-15);
 
     return exerciseSets.map((set) => {
@@ -523,12 +528,16 @@ export default function HistoryScreen() {
 
   const dateKeys = useMemo(() => Object.keys(groupedSets), [groupedSets]);
 
+  const reversedExerciseSets = useMemo(
+    () => selectedExercise?.sets.slice().reverse() ?? [],
+    [selectedExercise]
+  );
+
   // Calculate stats - memoized
   const { totalWorkouts, totalWeight, uniqueDates } = useMemo(() => {
     const total = filteredSets.length;
     const weight = filteredSets.reduce((sum, set) => sum + set.weight * set.reps, 0);
-    const dates = new Set(filteredSets.map((set) => new Date(set.workout_date).toDateString()))
-      .size;
+    const dates = new Set(filteredSets.map((set) => set.workout_date)).size;
     return { totalWorkouts: total, totalWeight: weight, uniqueDates: dates };
   }, [filteredSets]);
 
@@ -562,7 +571,7 @@ export default function HistoryScreen() {
     [calendarMonth]
   );
 
-  const todayDateString = new Date().toDateString();
+  const todayDateString = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
   // Show loading indicator on initial load
   if (isLoading) {
@@ -757,7 +766,7 @@ export default function HistoryScreen() {
                     </View>
                   ))}
                   {calendarDays.map((day) => {
-                    const dayStr = day.toDateString();
+                    const dayStr = format(day, 'yyyy-MM-dd');
                     const hasWorkout = daysWithWorkouts.has(dayStr);
                     const isSelected = selectedDate === dayStr;
                     const isCurrentMonth = isSameMonth(day, calendarMonth);
@@ -781,7 +790,7 @@ export default function HistoryScreen() {
                             backgroundColor: isSelected
                               ? chartColors.primary
                               : hasWorkout
-                                ? chartColors.primary + '55'
+                                ? chartColors.primaryAlpha
                                 : 'transparent',
                             borderWidth: isSelected ? 2 : isToday ? 1.5 : 0,
                             borderColor: isSelected
@@ -835,39 +844,77 @@ export default function HistoryScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setViewMode('progress')}
-                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${
-                  viewMode === 'progress' ? 'bg-primary' : 'border border-border bg-card'
-                }`}
+                activeOpacity={0.8}
+                style={{ flex: 1 }}
               >
-                <TrendingUp
-                  size={18}
-                  color={viewMode === 'progress' ? chartColors.background : chartColors.text}
-                />
-                <Text
-                  className={`font-medium ${
-                    viewMode === 'progress' ? 'text-primary-foreground' : 'text-foreground'
-                  }`}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    backgroundColor:
+                      viewMode === 'progress' ? chartColors.primary : chartColors.card,
+                    borderWidth: viewMode === 'progress' ? 0 : 1,
+                    borderColor: chartColors.grid,
+                  }}
                 >
-                  {t('progress')}
-                </Text>
+                  <TrendingUp
+                    size={18}
+                    color={
+                      viewMode === 'progress' ? chartColors.primaryForeground : chartColors.text
+                    }
+                  />
+                  <Text
+                    style={{
+                      fontWeight: '500',
+                      color:
+                        viewMode === 'progress' ? chartColors.primaryForeground : chartColors.text,
+                    }}
+                  >
+                    {t('progress')}
+                  </Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setViewMode('calendar')}
-                className={`flex-1 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3 ${
-                  viewMode === 'calendar' ? 'bg-primary' : 'border border-border bg-card'
-                }`}
+                activeOpacity={0.8}
+                style={{ flex: 1 }}
               >
-                <Calendar
-                  size={18}
-                  color={viewMode === 'calendar' ? chartColors.background : chartColors.text}
-                />
-                <Text
-                  className={`font-medium ${
-                    viewMode === 'calendar' ? 'text-primary-foreground' : 'text-foreground'
-                  }`}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    backgroundColor:
+                      viewMode === 'calendar' ? chartColors.primary : chartColors.card,
+                    borderWidth: viewMode === 'calendar' ? 0 : 1,
+                    borderColor: chartColors.grid,
+                  }}
                 >
-                  {t('calendar')}
-                </Text>
+                  <Calendar
+                    size={18}
+                    color={
+                      viewMode === 'calendar' ? chartColors.primaryForeground : chartColors.text
+                    }
+                  />
+                  <Text
+                    style={{
+                      fontWeight: '500',
+                      color:
+                        viewMode === 'calendar' ? chartColors.primaryForeground : chartColors.text,
+                    }}
+                  >
+                    {t('calendar')}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           )}
@@ -1229,26 +1276,23 @@ export default function HistoryScreen() {
                   {t('completeHistory')}
                 </Text>
                 <View className="gap-2">
-                  {selectedExercise.sets
-                    .slice()
-                    .reverse()
-                    .map((set) => (
-                      <View key={set.id} className="rounded-xl border border-border bg-card p-4">
-                        <View className="flex-row items-center justify-between">
-                          <View>
-                            <Text className="text-sm font-medium text-foreground">
-                              {formatDate(set.workout_date)} {t('at')} {formatTime(set.created_at)}
-                            </Text>
-                            <Text className="mt-1 text-xs text-muted-foreground">
-                              {getCategoryDisplayName(set.exercise_category, t)}
-                            </Text>
-                          </View>
-                          <Text className="text-lg font-bold text-primary">
-                            {set.weight} {t('kg')} × {set.reps}
+                  {reversedExerciseSets.map((set) => (
+                    <View key={set.id} className="rounded-xl border border-border bg-card p-4">
+                      <View className="flex-row items-center justify-between">
+                        <View>
+                          <Text className="text-sm font-medium text-foreground">
+                            {formatDate(set.workout_date)} {t('at')} {formatTime(set.created_at)}
+                          </Text>
+                          <Text className="mt-1 text-xs text-muted-foreground">
+                            {getCategoryDisplayName(set.exercise_category, t)}
                           </Text>
                         </View>
+                        <Text className="text-lg font-bold text-primary">
+                          {set.weight} {t('kg')} × {set.reps}
+                        </Text>
                       </View>
-                    ))}
+                    </View>
+                  ))}
                 </View>
               </ScrollView>
             )}

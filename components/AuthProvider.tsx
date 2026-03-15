@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-
 import { Alert, Platform } from 'react-native';
 
 import * as Google from 'expo-auth-session/providers/google';

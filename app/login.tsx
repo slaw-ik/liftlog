@@ -184,12 +184,16 @@ export default function LoginScreen() {
           <TouchableOpacity
             onPress={handleGoogleSignIn}
             disabled={isSigningIn || !isGoogleSignInReady}
-                className={`mb-4 flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn || !isGoogleSignInReady ? 'opacity-50' : ''}`}
+            className={`mb-4 flex-row items-center justify-center gap-3 rounded-xl border border-border bg-white py-4 shadow-sm ${isSigningIn || !isGoogleSignInReady ? 'opacity-50' : ''}`}
             style={{ elevation: 1 }}
           >
             <GoogleLogo size={20} />
             <Text className="text-base font-medium text-gray-700">
-              {!isGoogleSignInReady ? t('loading') : isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+              {!isGoogleSignInReady
+                ? t('loading')
+                : isSigningIn
+                  ? t('signingIn')
+                  : t('continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 

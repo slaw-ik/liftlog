@@ -62,11 +62,7 @@ export function getExerciseDisplayNameForStableId(
   stableId: string,
   t: (key: string) => string
 ): string {
-  return getExerciseDisplayName(
-    stableId,
-    isDefaultExerciseStableId(stableId) ? stableId : null,
-    t
-  );
+  return getExerciseDisplayName(stableId, isDefaultExerciseStableId(stableId) ? stableId : null, t);
 }
 
 // ============================================================================
@@ -159,10 +155,7 @@ async function migrateExerciseI18nKey(): Promise<void> {
   );
   for (const row of rows) {
     const name = row.name?.trim() ?? '';
-    const key =
-      nameToKey[name] ||
-      nameToKey[row.name] ||
-      nameToKey[name.toLowerCase()];
+    const key = nameToKey[name] || nameToKey[row.name] || nameToKey[name.toLowerCase()];
     if (key) {
       await db.runAsync('UPDATE exercises SET i18n_key = ? WHERE id = ?', [key, row.id]);
     }
@@ -170,10 +163,10 @@ async function migrateExerciseI18nKey(): Promise<void> {
 
   // 2) Correct previously wrong backfills (e.g. "Зведення сидячи" → hipAdduction, not seatedFlye)
   for (const [exerciseName, correctKey] of EXERCISE_NAME_KEY_CORRECTIONS) {
-    await db.runAsync(
-      'UPDATE exercises SET i18n_key = ? WHERE name = ?',
-      [correctKey, exerciseName]
-    );
+    await db.runAsync('UPDATE exercises SET i18n_key = ? WHERE name = ?', [
+      correctKey,
+      exerciseName,
+    ]);
   }
 }
 
@@ -647,4 +640,3 @@ export async function hasExercises(): Promise<boolean> {
   );
   return (result?.count ?? 0) > 0;
 }
-

@@ -85,7 +85,9 @@ const CustomNumpad = ({
   const handlePress = (digit: string) => {
     if (digit === '.') {
       // Only allow one decimal point
-      if (tempValue.includes('.')) return;
+      if (tempValue.includes('.')) {
+        return;
+      }
       // Add leading zero if starting with decimal
       if (tempValue === '') {
         setTempValue('0.');

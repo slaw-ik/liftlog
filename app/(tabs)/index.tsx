@@ -6,7 +6,6 @@ import { ArrowRight, Check, ChevronRight, Flame, Target, Zap } from 'lucide-reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
-import { getCategoryDisplayName } from '@/lib/i18n';
 import { RepsPicker, WeightPicker } from '@/components/NumberPicker';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
@@ -22,6 +21,7 @@ import {
   getWorkoutsByDateRange,
   SetWithDetails,
 } from '@/lib/database';
+import { getCategoryDisplayName } from '@/lib/i18n';
 
 // Section type for UI grouping
 type Section = {
@@ -402,11 +402,7 @@ export default function WorkoutScreen() {
                       </View>
                     )}
                     <Text className="text-base font-semibold text-foreground" numberOfLines={1}>
-                      {getExerciseDisplayName(
-                        set.exercise_name,
-                        set.exercise_i18n_key ?? null,
-                        t
-                      )}
+                      {getExerciseDisplayName(set.exercise_name, set.exercise_i18n_key ?? null, t)}
                     </Text>
                     <Text className="mt-1 text-xs text-muted-foreground" numberOfLines={1}>
                       {getCategoryDisplayName(set.exercise_category, t)}

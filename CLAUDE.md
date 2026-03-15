@@ -31,6 +31,7 @@ No test suite is configured.
 ### Provider Stack (`app/_layout.tsx`)
 
 Providers nest in this order (outermost first):
+
 1. `I18nProvider` — locale state; remounts entire tree on language change (uses React `key`)
 2. `ThemeProvider` — NativeWind light/dark theme CSS variables
 3. `AuthProvider` — Firebase auth state and Google OAuth
@@ -39,6 +40,7 @@ Providers nest in this order (outermost first):
 ### Navigation
 
 Expo Router file-based routing:
+
 - `app/login.tsx`, `app/signup.tsx` — pre-auth screens
 - `app/(tabs)/` — bottom-tab group (4 tabs): `index` (workout), `history`, `sections`, `profile`
 
@@ -52,6 +54,7 @@ Local-only SQLite (expo-sqlite). Schema: `workouts`, `exercises`, `sets`.
 ### State Management
 
 No Redux or Zustand. Uses React Context API only:
+
 - `useAuth()` — Firebase user, loading state, Google sign-in
 - `useI18n()` — `t()` translation function, `locale`, `setLocale`
 - Component-level `useState` for UI state

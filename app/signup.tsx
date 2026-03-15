@@ -240,7 +240,11 @@ export default function SignupScreen() {
           >
             <GoogleLogo size={20} />
             <Text className="text-base font-medium text-gray-700">
-              {!isGoogleSignInReady ? t('loading') : isSigningIn ? t('signingIn') : t('continueWithGoogle')}
+              {!isGoogleSignInReady
+                ? t('loading')
+                : isSigningIn
+                  ? t('signingIn')
+                  : t('continueWithGoogle')}
             </Text>
           </TouchableOpacity>
 

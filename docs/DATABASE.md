@@ -40,11 +40,11 @@ erDiagram
 
 ### What each table is
 
-| Table       | What it stores in plain English |
-|------------|----------------------------------|
-| **workouts** | One row = one training **session** (a day you trained). It only stores *when* (date) and optional notes. It does **not** store what you did; that’s in `sets`. |
+| Table         | What it stores in plain English                                                                                                                                                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **workouts**  | One row = one training **session** (a day you trained). It only stores _when_ (date) and optional notes. It does **not** store what you did; that’s in `sets`.                                                                                                                    |
 | **exercises** | One row = one **exercise definition**: name + category (e.g. “Bench Press” in “Presses”). Built-in exercises have an optional **i18n_key** so the app can show a translated label when the language changes; custom exercises have no key and are shown by their stored **name**. |
-| **sets**     | One row = **one performed set**: “I did X kg × Y reps of exercise Z in workout W.” So it links a **workout** (session) and an **exercise** (definition) and stores weight, reps, and type. |
+| **sets**      | One row = **one performed set**: “I did X kg × Y reps of exercise Z in workout W.” So it links a **workout** (session) and an **exercise** (definition) and stores weight, reps, and type.                                                                                        |
 
 ### How they connect
 
@@ -66,11 +66,11 @@ So:
 
 You define exercises once; they are reused for every set you log.
 
-| id | name         | category | i18n_key                    |
-|----|--------------|----------|-----------------------------|
-| 1  | Bench Press  | Presses  | defaultExercises.benchPress |
-| 2  | Squat        | Legs     | defaultExercises.squats     |
-| 3  | Deadlift     | Pulls    | defaultExercises.deadlift   |
+| id  | name        | category | i18n_key                    |
+| --- | ----------- | -------- | --------------------------- |
+| 1   | Bench Press | Presses  | defaultExercises.benchPress |
+| 2   | Squat       | Legs     | defaultExercises.squats     |
+| 3   | Deadlift    | Pulls    | defaultExercises.deadlift   |
 
 (User-created exercises have `i18n_key` = NULL and are always shown by their **name**.)
 
@@ -82,10 +82,10 @@ So: “Bench Press” is **one** row in `exercises`. Every time you log a set of
 
 Each row = one training day (one “workout” in the app).
 
-| id | date       | notes   |
-|----|------------|---------|
-| 1  | 2025-02-18 |         |
-| 2  | 2025-02-20 | Felt good |
+| id  | date       | notes     |
+| --- | ---------- | --------- |
+| 1   | 2025-02-18 |           |
+| 2   | 2025-02-20 | Felt good |
 
 So: “2025-02-18” is **one** workout. All sets you did that day will point to `workout_id = 1`.
 
@@ -95,11 +95,11 @@ So: “2025-02-18” is **one** workout. All sets you did that day will point to
 
 Each row = one logged set: “In workout X, I did exercise Y with Z kg × N reps.”
 
-| id | workout_id | exercise_id | weight | reps | load_type  |
-|----|------------|-------------|--------|------|------------|
-| 1  | 1          | 1           | 60     | 8    | weighted   |
-| 2  | 1          | 2           | 100    | 5    | weighted   |
-| 3  | 2          | 1           | 62     | 7    | weighted   |
+| id  | workout_id | exercise_id | weight | reps | load_type |
+| --- | ---------- | ----------- | ------ | ---- | --------- |
+| 1   | 1          | 1           | 60     | 8    | weighted  |
+| 2   | 1          | 2           | 100    | 5    | weighted  |
+| 3   | 2          | 1           | 62     | 7    | weighted  |
 
 Meaning:
 

@@ -15,7 +15,6 @@ import { Check, ChevronRight, Dumbbell, Edit, Plus, Trash2, X } from 'lucide-rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
-import { getCategoryDisplayName, getEnglishDefaultExerciseName } from '@/lib/i18n';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   createExercise,
@@ -23,12 +22,13 @@ import {
   deleteExercise,
   Exercise,
   getAllExercises,
-  getExerciseDisplayName,
   getCategories,
+  getExerciseDisplayName,
   hasExercises,
   seedDefaultExercises,
   updateExercise,
 } from '@/lib/database';
+import { getCategoryDisplayName, getEnglishDefaultExerciseName } from '@/lib/i18n';
 
 // Section type for UI grouping (category-based)
 type Section = {
@@ -86,16 +86,40 @@ export default function SectionsScreen() {
     const legs = t('defaultSections.legs');
 
     const keysPulls = [
-      'upperPull', 'narrowGrip', 'lowerPull', 'dumbbellRow', 'pullover', 'deadlift',
-      'barbellCurl', 'extension', 'trapezius', 'pullUps', 'forearm',
+      'upperPull',
+      'narrowGrip',
+      'lowerPull',
+      'dumbbellRow',
+      'pullover',
+      'deadlift',
+      'barbellCurl',
+      'extension',
+      'trapezius',
+      'pullUps',
+      'forearm',
     ];
     const keysPresses = [
-      'benchPress', 'inclineDumbbellPress', 'seatedPress', 'flyDumbbell', 'lateralRaise',
-      'pushdown', 'seatedFlye', 'rearDelt', 'dipsPause',
+      'benchPress',
+      'inclineDumbbellPress',
+      'seatedPress',
+      'flyDumbbell',
+      'lateralRaise',
+      'pushdown',
+      'seatedFlye',
+      'rearDelt',
+      'dipsPause',
     ];
     const keysLegs = [
-      'squats', 'lunges', 'quadriceps', 'hamstring', 'hipAbduction', 'hipAdduction',
-      'calfRaise', 'cableSquat', 'legPress', 'gluteBridge',
+      'squats',
+      'lunges',
+      'quadriceps',
+      'hamstring',
+      'hipAbduction',
+      'hipAdduction',
+      'calfRaise',
+      'cableSquat',
+      'legPress',
+      'gluteBridge',
     ];
     return [
       ...keysPulls.map((key) => ({
@@ -357,8 +381,8 @@ export default function SectionsScreen() {
                             className="flex-row items-center justify-between rounded-lg border border-border bg-background p-3"
                           >
                             <Text className="flex-1 text-foreground">
-                                {getExerciseDisplayName(exercise.name, exercise.i18n_key ?? null, t)}
-                              </Text>
+                              {getExerciseDisplayName(exercise.name, exercise.i18n_key ?? null, t)}
+                            </Text>
 
                             <View className="flex-row items-center gap-2">
                               <TouchableOpacity
