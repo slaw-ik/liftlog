@@ -1,11 +1,15 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
-import { Check, ChevronRight, Dumbbell, Edit, Plus, Trash2, X } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/components/I18nProvider';
+import { NameInputModal } from '@/components/sections/NameInputModal';
+import { SectionCard } from '@/components/sections/SectionCard';
+import { SectionsEmptyState } from '@/components/sections/SectionsEmptyState';
+import { SectionsSection } from '@/components/sections/types';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import {
   createExercise,
@@ -14,63 +18,51 @@ import {
   Exercise,
   getAllExercises,
   getCategories,
-  getExerciseDisplayName,
   hasExercises,
   seedDefaultExercises,
   updateExercise,
 } from '@/lib/database';
-import { getCategoryDisplayName, getEnglishDefaultExerciseName } from '@/lib/i18n';
-
-// Section type for UI grouping (category-based)
-type Section = {
-  name: string; // category name
-  exercises: Exercise[];
-};
+import { getEnglishDefaultExerciseName } from '@/lib/i18n';
 
 export default function SectionsScreen() {
   const { t } = useI18n();
-  const [sections, setSections] = useState<Section[]>([]);
+  const [sections, setSections] = useState<SectionsSection[]>([]);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [isEmpty, setIsEmpty] = useState(false);
 
-  // Section modal states (for adding new categories)
   const [showSectionModal, setShowSectionModal] = useState(false);
   const [sectionName, setSectionName] = useState('');
 
-  // Exercise modal states
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [exerciseName, setExerciseName] = useState('');
 
-  // Load sections when screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      loadSections();
-    }, [])
-  );
-
-  const loadSections = async () => {
+  const loadSections = useCallback(async () => {
     try {
-      const hasData = await hasExercises();
+      const [hasData, categories, allExercises] = await Promise.all([
+        hasExercises(),
+        getCategories(),
+        getAllExercises(),
+      ]);
       setIsEmpty(!hasData);
-
-      const categories = await getCategories();
-      const allExercises = await getAllExercises();
-
-      // Group exercises by category
-      const sectionsList: Section[] = categories.map((category) => ({
-        name: category,
-        exercises: allExercises.filter((ex) => ex.category === category),
-      }));
-
-      setSections(sectionsList);
+      setSections(
+        categories.map((category) => ({
+          name: category,
+          exercises: allExercises.filter((ex) => ex.category === category),
+        }))
+      );
     } catch (error) {
       console.error('Failed to load sections:', error);
     }
-  };
+  }, []);
 
-  // Generate default exercises with current language translations
+  useFocusEffect(
+    useCallback(() => {
+      loadSections();
+    }, [loadSections])
+  );
+
   const getDefaultExercises = (): DefaultExerciseDefinition[] => {
     const pulls = t('defaultSections.pulls');
     const presses = t('defaultSections.presses');
@@ -112,6 +104,7 @@ export default function SectionsScreen() {
       'legPress',
       'gluteBridge',
     ];
+
     return [
       ...keysPulls.map((key) => ({
         name: getEnglishDefaultExerciseName(key),
@@ -133,8 +126,7 @@ export default function SectionsScreen() {
 
   const handleAddDefaultCategories = async () => {
     try {
-      const defaultExercises = getDefaultExercises();
-      const created = await seedDefaultExercises(defaultExercises);
+      const created = await seedDefaultExercises(getDefaultExercises());
       await loadSections();
       Alert.alert(
         t('sectionScreen.defaultsAdded'),
@@ -145,21 +137,12 @@ export default function SectionsScreen() {
     }
   };
 
-  // Section (Category) operations
-  const openAddSectionModal = () => {
-    setSectionName('');
-    setShowSectionModal(true);
-  };
-
   const handleSaveSection = async () => {
     if (!sectionName.trim()) {
       Alert.alert(t('error'), t('sectionScreen.sectionNameEmpty'));
       return;
     }
-
     try {
-      // Create a placeholder exercise to establish the category
-      // (Categories are derived from exercises in this schema)
       await createExercise(t('sectionScreen.newExercise'), sectionName.trim());
       await loadSections();
       setShowSectionModal(false);
@@ -169,60 +152,55 @@ export default function SectionsScreen() {
     }
   };
 
-  const handleDeleteSection = (categoryName: string) => {
-    Alert.alert(t('sectionScreen.deleteSection'), t('sectionScreen.deleteSectionConfirm'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            // Delete all exercises in this category
-            const section = sections.find((s) => s.name === categoryName);
-            if (section) {
-              for (const exercise of section.exercises) {
-                await deleteExercise(exercise.id);
+  const handleDeleteSection = useCallback(
+    (categoryName: string) => {
+      Alert.alert(t('sectionScreen.deleteSection'), t('sectionScreen.deleteSectionConfirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const section = sections.find((s) => s.name === categoryName);
+              if (section) {
+                await Promise.all(section.exercises.map((ex) => deleteExercise(ex.id)));
               }
+              await loadSections();
+            } catch (error) {
+              Alert.alert(t('error'), String(error));
             }
-            await loadSections();
-          } catch (error) {
-            Alert.alert(t('error'), String(error));
-          }
+          },
         },
-      },
-    ]);
-  };
+      ]);
+    },
+    [sections, t, loadSections]
+  );
 
-  // Exercise CRUD operations
-  const openAddExerciseModal = (categoryName: string) => {
+  const openAddExerciseModal = useCallback((categoryName: string) => {
     setActiveCategory(categoryName);
     setEditingExercise(null);
     setExerciseName('');
     setShowExerciseModal(true);
-  };
+  }, []);
 
-  const openEditExerciseModal = (categoryName: string, exercise: Exercise) => {
+  const openEditExerciseModal = useCallback((categoryName: string, exercise: Exercise) => {
     setActiveCategory(categoryName);
     setEditingExercise(exercise);
     setExerciseName(exercise.name);
     setShowExerciseModal(true);
-  };
+  }, []);
 
   const handleSaveExercise = async () => {
     if (!exerciseName.trim() || !activeCategory) {
       Alert.alert(t('error'), t('sectionScreen.exerciseNameEmpty'));
       return;
     }
-
     try {
       if (editingExercise) {
-        // Edit existing exercise
         await updateExercise(editingExercise.id, exerciseName.trim(), activeCategory);
       } else {
-        // Add new exercise
         await createExercise(exerciseName.trim(), activeCategory);
       }
-
       await loadSections();
       setShowExerciseModal(false);
       setExerciseName('');
@@ -231,31 +209,33 @@ export default function SectionsScreen() {
     }
   };
 
-  const handleDeleteExercise = (categoryName: string, exerciseId: number) => {
-    Alert.alert(t('sectionScreen.deleteExercise'), t('sectionScreen.deleteExerciseConfirm'), [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('delete'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteExercise(exerciseId);
-            await loadSections();
-          } catch (error) {
-            Alert.alert(t('error'), String(error));
-          }
+  const handleDeleteExercise = useCallback(
+    (categoryName: string, exerciseId: number) => {
+      Alert.alert(t('sectionScreen.deleteExercise'), t('sectionScreen.deleteExerciseConfirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteExercise(exerciseId);
+              await loadSections();
+            } catch (error) {
+              Alert.alert(t('error'), String(error));
+            }
+          },
         },
-      },
-    ]);
-  };
+      ]);
+    },
+    [t, loadSections]
+  );
 
-  const toggleSection = (categoryName: string) => {
-    setExpandedSection(expandedSection === categoryName ? null : categoryName);
-  };
+  const toggleSection = useCallback((categoryName: string) => {
+    setExpandedSection((prev) => (prev === categoryName ? null : categoryName));
+  }, []);
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      {/* Header */}
       <View className="flex-row items-center justify-between border-b border-border px-6 py-4">
         <View>
           <Text className="text-2xl font-bold text-foreground">{t('sectionScreen.title')}</Text>
@@ -269,10 +249,12 @@ export default function SectionsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 128, paddingTop: 16 }}>
-        {/* Add Section Button */}
         <View className="mb-4 px-6">
           <TouchableOpacity
-            onPress={openAddSectionModal}
+            onPress={() => {
+              setSectionName('');
+              setShowSectionModal(true);
+            }}
             className="flex-row items-center justify-center rounded-xl bg-primary p-4"
             activeOpacity={0.7}
           >
@@ -283,248 +265,47 @@ export default function SectionsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Sections List */}
         <View className="gap-3 px-6">
-          {sections.map((section) => {
-            const isExpanded = expandedSection === section.name;
-            const exerciseCount = section.exercises.length;
-            return (
-              <View
-                key={section.name}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                {/* Section Header */}
-                <TouchableOpacity
-                  onPress={() => toggleSection(section.name)}
-                  className="flex-row items-center justify-between p-4"
-                  activeOpacity={0.7}
-                >
-                  <View className="flex-1">
-                    <Text className="text-lg font-bold text-foreground">
-                      {getCategoryDisplayName(section.name, t)}
-                    </Text>
-                    <Text className="mt-1 text-sm text-muted-foreground">
-                      {exerciseCount}{' '}
-                      {exerciseCount === 1
-                        ? t('sectionScreen.exercise')
-                        : t('sectionScreen.exercises')}
-                    </Text>
-                  </View>
-
-                  <View className="flex-row items-center gap-2">
-                    <TouchableOpacity
-                      onPress={() => handleDeleteSection(section.name)}
-                      className="rounded-lg bg-destructive/10 p-2"
-                      activeOpacity={0.7}
-                    >
-                      <Trash2 className="text-destructive" size={18} />
-                    </TouchableOpacity>
-
-                    <ChevronRight
-                      className={`text-muted-foreground ${isExpanded ? 'rotate-90' : ''}`}
-                      size={20}
-                    />
-                  </View>
-                </TouchableOpacity>
-
-                {/* Expanded Exercises */}
-                {isExpanded && (
-                  <View className="border-t border-border bg-muted/30">
-                    {/* Add Exercise Button */}
-                    <TouchableOpacity
-                      onPress={() => openAddExerciseModal(section.name)}
-                      className="mx-3 mt-3 flex-row items-center justify-center rounded-lg border border-border bg-background p-3"
-                      activeOpacity={0.7}
-                    >
-                      <Plus className="mr-2 text-primary" size={18} />
-                      <Text className="font-medium text-primary">
-                        {t('sectionScreen.addExercise')}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* Exercises List */}
-                    {section.exercises.length === 0 ? (
-                      <View className="items-center p-6">
-                        <Dumbbell className="mb-2 text-muted-foreground" size={32} />
-                        <Text className="text-center text-muted-foreground">
-                          {t('sectionScreen.noExercisesYet')}
-                        </Text>
-                        <Text className="mt-1 text-center text-sm text-muted-foreground">
-                          {t('sectionScreen.tapAddExercise')}
-                        </Text>
-                      </View>
-                    ) : (
-                      <View className="gap-2 p-3">
-                        {section.exercises.map((exercise) => (
-                          <View
-                            key={exercise.id}
-                            className="flex-row items-center justify-between rounded-lg border border-border bg-background p-3"
-                          >
-                            <Text className="flex-1 text-foreground">
-                              {getExerciseDisplayName(exercise.name, exercise.i18n_key ?? null, t)}
-                            </Text>
-
-                            <View className="flex-row items-center gap-2">
-                              <TouchableOpacity
-                                onPress={() => openEditExerciseModal(section.name, exercise)}
-                                className="rounded-lg bg-secondary p-2"
-                                activeOpacity={0.7}
-                              >
-                                <Edit className="text-secondary-foreground" size={16} />
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                onPress={() => handleDeleteExercise(section.name, exercise.id)}
-                                className="rounded-lg bg-destructive/10 p-2"
-                                activeOpacity={0.7}
-                              >
-                                <Trash2 className="text-destructive" size={16} />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            );
-          })}
+          {sections.map((section) => (
+            <SectionCard
+              key={section.name}
+              section={section}
+              isExpanded={expandedSection === section.name}
+              onToggle={toggleSection}
+              onDeleteSection={handleDeleteSection}
+              onAddExercise={openAddExerciseModal}
+              onEditExercise={openEditExerciseModal}
+              onDeleteExercise={handleDeleteExercise}
+            />
+          ))}
 
           {sections.length === 0 && (
-            <View className="items-center py-12">
-              <Dumbbell className="mb-4 text-muted-foreground" size={48} />
-              <Text className="text-center text-xl font-bold text-foreground">
-                {t('sectionScreen.noSectionsYet')}
-              </Text>
-              <Text className="mt-2 px-8 text-center text-muted-foreground">
-                {t('sectionScreen.createFirstSection')}
-              </Text>
-
-              {isEmpty && (
-                <TouchableOpacity
-                  onPress={handleAddDefaultCategories}
-                  className="mt-6 flex-row items-center rounded-xl bg-secondary px-6 py-3"
-                  activeOpacity={0.7}
-                >
-                  <Plus className="mr-2 text-secondary-foreground" size={18} />
-                  <Text className="font-semibold text-secondary-foreground">
-                    {t('sectionScreen.addDefaultCategories')}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <SectionsEmptyState isEmpty={isEmpty} onAddDefaults={handleAddDefaultCategories} />
           )}
         </View>
       </ScrollView>
 
-      {/* Section Add Modal (New Category) */}
-      <Modal
+      <NameInputModal
         visible={showSectionModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSectionModal(false)}
-      >
-        <View className="flex-1 items-center justify-center bg-black/50 px-6">
-          <View className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-foreground">
-                {t('sectionScreen.newSection')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowSectionModal(false)} activeOpacity={0.7}>
-                <X className="text-muted-foreground" size={24} />
-              </TouchableOpacity>
-            </View>
+        title={t('sectionScreen.newSection')}
+        label={t('sectionScreen.sectionName')}
+        placeholder={t('sectionScreen.sectionNamePlaceholder')}
+        value={sectionName}
+        onChangeValue={setSectionName}
+        onSave={handleSaveSection}
+        onClose={() => setShowSectionModal(false)}
+      />
 
-            <View className="mb-6">
-              <Text className="mb-2 text-sm font-medium text-foreground">
-                {t('sectionScreen.sectionName')}
-              </Text>
-              <TextInput
-                value={sectionName}
-                onChangeText={setSectionName}
-                placeholder={t('sectionScreen.sectionNamePlaceholder')}
-                placeholderTextColor="#a8a29e"
-                className="rounded-xl border border-border bg-input px-4 py-3 text-foreground"
-                autoFocus
-              />
-            </View>
-
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setShowSectionModal(false)}
-                className="flex-1 items-center rounded-xl bg-secondary p-3"
-                activeOpacity={0.7}
-              >
-                <Text className="font-semibold text-secondary-foreground">{t('cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleSaveSection}
-                className="flex-1 flex-row items-center justify-center rounded-xl bg-primary p-3"
-                activeOpacity={0.7}
-              >
-                <Check className="mr-2 text-primary-foreground" size={18} />
-                <Text className="font-semibold text-primary-foreground">{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Exercise Add/Edit Modal */}
-      <Modal
+      <NameInputModal
         visible={showExerciseModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowExerciseModal(false)}
-      >
-        <View className="flex-1 items-center justify-center bg-black/50 px-6">
-          <View className="w-full max-w-md rounded-2xl border border-border bg-card p-6">
-            <View className="mb-4 flex-row items-center justify-between">
-              <Text className="text-xl font-bold text-foreground">
-                {editingExercise ? t('sectionScreen.editExercise') : t('sectionScreen.newExercise')}
-              </Text>
-              <TouchableOpacity onPress={() => setShowExerciseModal(false)} activeOpacity={0.7}>
-                <X className="text-muted-foreground" size={24} />
-              </TouchableOpacity>
-            </View>
-
-            <View className="mb-6">
-              <Text className="mb-2 text-sm font-medium text-foreground">
-                {t('sectionScreen.exerciseName')}
-              </Text>
-              <TextInput
-                value={exerciseName}
-                onChangeText={setExerciseName}
-                placeholder={t('sectionScreen.exerciseNamePlaceholder')}
-                placeholderTextColor="#a8a29e"
-                className="rounded-xl border border-border bg-input px-4 py-3 text-foreground"
-                autoFocus
-              />
-            </View>
-
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => setShowExerciseModal(false)}
-                className="flex-1 items-center rounded-xl bg-secondary p-3"
-                activeOpacity={0.7}
-              >
-                <Text className="font-semibold text-secondary-foreground">{t('cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleSaveExercise}
-                className="flex-1 flex-row items-center justify-center rounded-xl bg-primary p-3"
-                activeOpacity={0.7}
-              >
-                <Check className="mr-2 text-primary-foreground" size={18} />
-                <Text className="font-semibold text-primary-foreground">{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        title={editingExercise ? t('sectionScreen.editExercise') : t('sectionScreen.newExercise')}
+        label={t('sectionScreen.exerciseName')}
+        placeholder={t('sectionScreen.exerciseNamePlaceholder')}
+        value={exerciseName}
+        onChangeValue={setExerciseName}
+        onSave={handleSaveExercise}
+        onClose={() => setShowExerciseModal(false)}
+      />
     </SafeAreaView>
   );
 }
