@@ -13,6 +13,17 @@ type Props = {
   activeFiltersCount: number;
 };
 
+const buttonBase = {
+  flex: 1,
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+  gap: 6,
+  borderRadius: 12,
+  paddingVertical: 12,
+  borderWidth: 1,
+};
+
 export function ViewModeToggle({
   viewMode,
   onViewModeChange,
@@ -22,82 +33,83 @@ export function ViewModeToggle({
   const { t } = useI18n();
   const chartColors = useChartColors();
 
+  const isProgress = viewMode === 'progress';
+  const isCalendar = viewMode === 'calendar';
+
   return (
-    <View className="flex-row gap-3 px-6 pb-4">
+    <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 24, paddingBottom: 16 }}>
       <TouchableOpacity
         onPress={onOpenFilters}
-        className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3"
+        activeOpacity={0.7}
+        style={{ ...buttonBase, backgroundColor: chartColors.card, borderColor: chartColors.grid }}
       >
-        <Filter className="text-foreground" size={18} />
-        <Text className="font-medium text-foreground">
-          {t('filters')} {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+        <View style={{ position: 'relative' }}>
+          <Filter size={18} color={chartColors.text} />
+          {activeFiltersCount > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                width: 9,
+                height: 9,
+                borderRadius: 5,
+                backgroundColor: chartColors.primary,
+              }}
+            />
+          )}
+        </View>
+        <Text numberOfLines={1} style={{ fontWeight: '500', color: chartColors.text }}>
+          {t('filters')}
         </Text>
       </TouchableOpacity>
+
       <TouchableOpacity
         onPress={() => onViewModeChange('progress')}
-        activeOpacity={0.8}
-        style={{ flex: 1 }}
+        activeOpacity={0.7}
+        style={{
+          ...buttonBase,
+          backgroundColor: isProgress ? chartColors.primary : chartColors.card,
+          borderColor: isProgress ? chartColors.primary : chartColors.grid,
+        }}
       >
-        <View
+        <TrendingUp
+          size={18}
+          color={isProgress ? chartColors.primaryForeground : chartColors.text}
+        />
+        <Text
+          numberOfLines={1}
           style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            borderRadius: 12,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            backgroundColor: viewMode === 'progress' ? chartColors.primary : chartColors.card,
-            borderWidth: viewMode === 'progress' ? 0 : 1,
-            borderColor: chartColors.grid,
+            fontWeight: '500',
+            color: isProgress ? chartColors.primaryForeground : chartColors.text,
           }}
         >
-          <TrendingUp
-            size={18}
-            color={viewMode === 'progress' ? chartColors.primaryForeground : chartColors.text}
-          />
-          <Text
-            style={{
-              fontWeight: '500',
-              color: viewMode === 'progress' ? chartColors.primaryForeground : chartColors.text,
-            }}
-          >
-            {t('progress')}
-          </Text>
-        </View>
+          {t('progress')}
+        </Text>
       </TouchableOpacity>
+
       <TouchableOpacity
         onPress={() => onViewModeChange('calendar')}
-        activeOpacity={0.8}
-        style={{ flex: 1 }}
+        activeOpacity={0.7}
+        style={{
+          ...buttonBase,
+          backgroundColor: isCalendar ? chartColors.primary : chartColors.card,
+          borderColor: isCalendar ? chartColors.primary : chartColors.grid,
+        }}
       >
-        <View
+        <Calendar
+          size={18}
+          color={isCalendar ? chartColors.primaryForeground : chartColors.text}
+        />
+        <Text
+          numberOfLines={1}
           style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            borderRadius: 12,
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            backgroundColor: viewMode === 'calendar' ? chartColors.primary : chartColors.card,
-            borderWidth: viewMode === 'calendar' ? 0 : 1,
-            borderColor: chartColors.grid,
+            fontWeight: '500',
+            color: isCalendar ? chartColors.primaryForeground : chartColors.text,
           }}
         >
-          <Calendar
-            size={18}
-            color={viewMode === 'calendar' ? chartColors.primaryForeground : chartColors.text}
-          />
-          <Text
-            style={{
-              fontWeight: '500',
-              color: viewMode === 'calendar' ? chartColors.primaryForeground : chartColors.text,
-            }}
-          >
-            {t('calendar')}
-          </Text>
-        </View>
+          {t('calendar')}
+        </Text>
       </TouchableOpacity>
     </View>
   );

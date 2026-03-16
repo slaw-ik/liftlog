@@ -88,15 +88,15 @@ export function CalendarView({
     <View className="mb-4 px-6">
       <Text className="mb-2 text-lg font-semibold text-foreground">{t('calendar')}</Text>
       <View className="rounded-2xl border border-border bg-card p-4">
-        <View className="mb-3 flex-row items-center justify-between">
-          <TouchableOpacity onPress={onPrevMonth} className="rounded-full p-2" hitSlop={12}>
-            <ChevronLeft size={24} color={chartColors.text} />
+        <View className="mb-2 flex-row items-center justify-between">
+          <TouchableOpacity onPress={onPrevMonth} className="rounded-full p-1.5" hitSlop={12}>
+            <ChevronLeft size={20} color={chartColors.text} />
           </TouchableOpacity>
           <Text className="text-base font-semibold text-foreground">
             {t(CALENDAR_MONTH_KEYS[calendarMonth.getMonth()])} {calendarMonth.getFullYear()}
           </Text>
-          <TouchableOpacity onPress={onNextMonth} className="rounded-full p-2" hitSlop={12}>
-            <ChevronRight size={24} color={chartColors.text} />
+          <TouchableOpacity onPress={onNextMonth} className="rounded-full p-1.5" hitSlop={12}>
+            <ChevronRight size={20} color={chartColors.text} />
           </TouchableOpacity>
         </View>
         <View className="flex-row flex-wrap">
@@ -122,10 +122,10 @@ export function CalendarView({
                   }
                 }}
                 activeOpacity={0.7}
-                className="aspect-square w-[14.28%] items-center justify-center py-0.5"
+                className="h-8 w-[14.28%] items-center justify-center"
               >
                 <View
-                  className="min-h-[32px] min-w-[32px] items-center justify-center rounded-full"
+                  className="h-7 w-7 items-center justify-center rounded-full"
                   style={{
                     backgroundColor: isSelected
                       ? chartColors.primary
