@@ -3,7 +3,6 @@ import { Text, TouchableOpacity, View } from 'react-native';
 
 import {
   addDays,
-  addMonths,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
@@ -11,7 +10,6 @@ import {
   isSameMonth,
   startOfMonth,
   startOfWeek,
-  subMonths,
 } from 'date-fns';
 import { enUS, ru, uk } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';

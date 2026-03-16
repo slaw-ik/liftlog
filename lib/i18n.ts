@@ -7,6 +7,7 @@ const translations = {
   en: {
     // Common
     cancel: 'Cancel',
+    done: 'Done',
     delete: 'Delete',
     save: 'Save',
     edit: 'Edit',
@@ -312,6 +313,7 @@ const translations = {
   ru: {
     // Common
     cancel: 'Отмена',
+    done: 'Готово',
     delete: 'Удалить',
     save: 'Сохранить',
     edit: 'Изменить',
@@ -619,6 +621,7 @@ const translations = {
   uk: {
     // Common
     cancel: 'Скасувати',
+    done: 'Готово',
     delete: 'Видалити',
     save: 'Зберегти',
     edit: 'Змінити',
@@ -1038,6 +1041,34 @@ export function getDefaultSectionNameToKeyMap(): Record<string, string> {
 export function getCategoryDisplayName(category: string, t: (key: string) => string): string {
   const key = getDefaultSectionNameToKeyMap()[category];
   return key ? t(key) : category;
+}
+
+/**
+ * Formats a date string as a locale-aware relative label.
+ * Returns t('today') / t('yesterday') for the last two days,
+ * otherwise a short formatted date (e.g. "15 Mar 2025").
+ */
+export function formatRelativeDate(
+  dateString: string,
+  locale: string,
+  t: (key: string) => string
+): string {
+  const date = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return t('today');
+  }
+  if (date.toDateString() === yesterday.toDateString()) {
+    return t('yesterday');
+  }
+  return date.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 // Set default locale

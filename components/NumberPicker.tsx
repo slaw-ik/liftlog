@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { Picker } from '@react-native-picker/picker';
+
+import { useI18n } from '@/components/I18nProvider';
 
 type NumberPickerProps = {
   value: string;
@@ -80,6 +82,7 @@ const CustomNumpad = ({
   label: string;
   suffix: string;
 }) => {
+  const { t } = useI18n();
   const [tempValue, setTempValue] = useState(value || '');
 
   const handlePress = (digit: string) => {
@@ -118,11 +121,11 @@ const CustomNumpad = ({
           {/* Header */}
           <View className="flex-row items-center justify-between border-b border-border bg-muted/30 px-6 py-4">
             <TouchableOpacity onPress={onClose} className="px-3 py-2">
-              <Text className="text-base font-medium text-muted-foreground">Cancel</Text>
+              <Text className="text-base font-medium text-muted-foreground">{t('cancel')}</Text>
             </TouchableOpacity>
             <Text className="text-lg font-bold text-foreground">{label}</Text>
             <TouchableOpacity onPress={handleDone} className="px-3 py-2">
-              <Text className="text-base font-bold text-primary">Done</Text>
+              <Text className="text-base font-bold text-primary">{t('done')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -183,10 +186,14 @@ export function NumberPicker({
   decimal = false,
   suffix = '',
 }: NumberPickerProps) {
+  const { t } = useI18n();
   const [showPicker, setShowPicker] = useState(false);
   const [tempValue, setTempValue] = useState(value || (decimal ? min.toFixed(1) : min.toString()));
 
-  const numbers = generateNumbers(min, max, step, decimal);
+  const numbers = useMemo(
+    () => generateNumbers(min, max, step, decimal),
+    [min, max, step, decimal]
+  );
 
   // For iOS - use native picker wheel
   if (Platform.OS === 'ios') {
@@ -229,7 +236,7 @@ export function NumberPicker({
               {/* Header with Cancel and Done */}
               <View className="flex-row items-center justify-between border-b border-border bg-muted/30 px-6 py-4">
                 <TouchableOpacity onPress={() => setShowPicker(false)} className="px-3 py-2">
-                  <Text className="text-base font-medium text-muted-foreground">Cancel</Text>
+                  <Text className="text-base font-medium text-muted-foreground">{t('cancel')}</Text>
                 </TouchableOpacity>
                 <Text className="text-lg font-bold text-foreground">{label}</Text>
                 <TouchableOpacity
@@ -239,7 +246,7 @@ export function NumberPicker({
                   }}
                   className="px-3 py-2"
                 >
-                  <Text className="text-base font-bold text-primary">Done</Text>
+                  <Text className="text-base font-bold text-primary">{t('done')}</Text>
                 </TouchableOpacity>
               </View>
 

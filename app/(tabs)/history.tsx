@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
 import { addMonths, format, subMonths } from 'date-fns';
-import { useColorScheme } from 'nativewind';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarView } from '@/components/history/CalendarView';
@@ -25,22 +24,20 @@ import {
   updateSet,
 } from '@/lib/database';
 import { calculateE1RM, getProgressValue, ProgressMetric } from '@/lib/fitness';
+import { formatRelativeDate } from '@/lib/i18n';
 import { useChartColors } from '@/lib/useChartColors';
 
 export default function HistoryScreen() {
   const { t, locale } = useI18n();
-  const { colorScheme } = useColorScheme();
-  const isDark = colorScheme === 'dark';
   const chartColors = useChartColors();
 
   const [allSets, setAllSets] = useState<SetWithDetails[]>([]);
-  const [filteredSets, setFilteredSets] = useState<SetWithDetails[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseProgress | null>(null);
   const [selectedChartExercise, setSelectedChartExercise] = useState<string>('all');
-  const [progressMetric, setProgressMetric] = useState<ProgressMetric>('e1rm');
+  const progressMetric: ProgressMetric = 'e1rm';
 
   // View mode: progress chart vs calendar (default calendar)
   const [viewMode, setViewMode] = useState<'progress' | 'calendar'>('calendar');
@@ -61,12 +58,12 @@ export default function HistoryScreen() {
   const [editReps, setEditReps] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Loading state - only show on first load
+  // Loading state - only show on the first load
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
-      // Run queries in parallel - limit to last 500 sets for performance
+      // Run queries in parallel - limit to the last 500 sets for performance
       const [sets, cats] = await Promise.all([getAllSetsWithDetails(500), getCategories()]);
 
       setAllSets(sets);
@@ -78,49 +75,38 @@ export default function HistoryScreen() {
     }
   }, []);
 
-  // Always reload data when screen comes into focus so new sets appear immediately
+  // Always reload data when the screen comes into focus so new sets appear immediately
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      void loadData();
     }, [loadData])
   );
 
-  const applyFiltersToSets = useCallback(
-    (
-      setsToFilter: SetWithDetails[],
-      section: string,
-      exercise: string,
-      dateRange: 'week' | 'month' | 'all'
-    ) => {
-      let filtered = [...setsToFilter];
+  const filteredSets = useMemo(() => {
+    if (filterSection === 'all' && filterExercise === 'all' && filterDateRange === 'all') {
+      return allSets;
+    }
 
-      if (section !== 'all') {
-        filtered = filtered.filter((set) => set.exercise_category === section);
+    let cutoffStr: string | null = null;
+    if (filterDateRange !== 'all') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (filterDateRange === 'week' ? 7 : 30));
+      cutoffStr = format(cutoff, 'yyyy-MM-dd');
+    }
+
+    return allSets.filter((set) => {
+      if (filterSection !== 'all' && set.exercise_category !== filterSection) {
+        return false;
       }
-
-      if (exercise !== 'all') {
-        filtered = filtered.filter(
-          (set) => (set.exercise_i18n_key ?? set.exercise_name) === exercise
-        );
+      if (
+        filterExercise !== 'all' &&
+        (set.exercise_i18n_key ?? set.exercise_name) !== filterExercise
+      ) {
+        return false;
       }
-
-      if (dateRange !== 'all') {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - (dateRange === 'week' ? 7 : 30));
-        const cutoffStr = format(cutoff, 'yyyy-MM-dd');
-        filtered = filtered.filter((set) => set.workout_date >= cutoffStr);
-      }
-
-      return filtered;
-    },
-    []
-  );
-
-  // Single source of truth: derive filteredSets from allSets + filter state (fixes new sets not showing)
-  useEffect(() => {
-    const filtered = applyFiltersToSets(allSets, filterSection, filterExercise, filterDateRange);
-    setFilteredSets(filtered);
-  }, [allSets, filterSection, filterExercise, filterDateRange, applyFiltersToSets]);
+      return cutoffStr === null || set.workout_date >= cutoffStr;
+    });
+  }, [allSets, filterSection, filterExercise, filterDateRange]);
 
   const clearFilters = () => {
     setFilterSection('all');
@@ -128,8 +114,8 @@ export default function HistoryScreen() {
     setFilterDateRange('all');
   };
 
-  // Ordered by most recent use; scoped to filteredSets so only in-range exercises appear.
-  // filteredSets preserves the DB order (workout_date DESC), so first occurrence = most recent.
+  // Ordered by the most recent use; scoped to filteredSets so only in-range exercises appear.
+  // filteredSets preserve the DB order (workout_date DESC), so first occurrence = most recent.
   const exercises = useMemo(() => {
     const seen = new Set<string>();
     for (const set of filteredSets) {
@@ -247,24 +233,7 @@ export default function HistoryScreen() {
   }, [editingSet, editWeight, editReps, isSavingEdit, t, loadData, closeEditSet]);
 
   const formatDate = useCallback(
-    (dateString: string) => {
-      const date = new Date(dateString);
-      const today = new Date();
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      if (date.toDateString() === today.toDateString()) {
-        return t('today');
-      }
-      if (date.toDateString() === yesterday.toDateString()) {
-        return t('yesterday');
-      }
-      return date.toLocaleDateString(locale, {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    },
+    (dateString: string) => formatRelativeDate(dateString, locale, t),
     [t, locale]
   );
 
@@ -303,7 +272,7 @@ export default function HistoryScreen() {
     return set;
   }, [filteredSets]);
 
-  // When a day is selected in calendar, show only that day in the list; otherwise all
+  // When a day is selected in the calendar, show only that day in the list; otherwise all
   const setsForList = useMemo(() => {
     if (!selectedDate) {
       return filteredSets;
@@ -320,14 +289,14 @@ export default function HistoryScreen() {
       }
       grouped[dateKey].push(set);
     });
-    // Within each day, show most recent sets first (last logged at top)
+    // Within each day, show the most recent sets first (last logged at top)
     Object.keys(grouped).forEach((key) => {
       grouped[key].sort((a, b) => (a.created_at > b.created_at ? -1 : 1));
     });
     return grouped;
   }, [setsForList]);
 
-  // Generate exercise progression data based on selected metric
+  // Generate exercise progression data based on a selected metric
   const getExerciseChartData = useMemo(() => {
     if (selectedChartExercise === 'all' || !selectedChartExercise) {
       return [];
@@ -389,7 +358,7 @@ export default function HistoryScreen() {
 
   const todayDateString = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
 
-  // Show loading indicator on initial load
+  // Show loading indicator on an initial load
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
@@ -515,7 +484,6 @@ export default function HistoryScreen() {
         selectedExercise={selectedExercise}
         chartData={getProgressChartData}
         reversedSets={reversedExerciseSets}
-        progressMetric={progressMetric}
         formatDate={formatDate}
         formatTime={formatTime}
       />

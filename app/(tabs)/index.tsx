@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Dimensions, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,7 +15,7 @@ import {
   getAllExercises,
   getCategories,
   getExerciseDisplayName,
-  getSetsByExercise,
+  getLastSetPerExercise,
   getTodaySets,
   getWeeklyStats,
   getWorkoutsByDateRange,
@@ -66,15 +66,19 @@ export default function WorkoutScreen() {
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current !== null) {
+        clearTimeout(successTimerRef.current);
+      }
+    };
+  }, []);
+
   const greetingData = useMemo(() => getGreeting(t), [t]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       // Load categories and exercises from SQLite
       const categories = await getCategories();
@@ -96,22 +100,22 @@ export default function WorkoutScreen() {
       const stats = await getWeeklyStats();
       setWeeklyStatsData(stats);
 
-      // Build recent sets list (use today's sets + we could add more)
+      // Build recent sets list
       setRecentSets(todaySets.slice(0, 8));
 
-      // Build last set map for each exercise
-      const lastSetsMap = new Map<number, SetWithDetails>();
-      for (const exercise of allExercises) {
-        const exerciseSets = await getSetsByExercise(exercise.id);
-        if (exerciseSets.length > 0) {
-          lastSetsMap.set(exercise.id, exerciseSets[0]); // First one is most recent
-        }
-      }
+      // Single query replacing the N+1 per-exercise loop
+      const lastSetsMap = await getLastSetPerExercise();
       setExerciseLastSets(lastSetsMap);
     } catch (error) {
       console.error('Error loading data:', error);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const saveWorkout = async () => {
     if (!selectedSection || !selectedExercise || !weight || !reps) {
@@ -155,7 +159,7 @@ export default function WorkoutScreen() {
 
       // Show success animation
       setShowSuccessAnimation(true);
-      setTimeout(() => {
+      successTimerRef.current = setTimeout(() => {
         setShowSuccessAnimation(false);
         setSelectedSection(null);
         setSelectedExercise(null);
@@ -169,10 +173,18 @@ export default function WorkoutScreen() {
     }
   };
 
-  const getLastExerciseStats = (exerciseId: number) => {
-    const lastSet = exerciseLastSets.get(exerciseId);
-    return lastSet ? `${lastSet.weight}kg × ${lastSet.reps}` : t('noData');
-  };
+  const todayVolume = useMemo(
+    () => todaySetsData.reduce((acc, set) => acc + set.weight * set.reps, 0),
+    [todaySetsData]
+  );
+
+  const getLastExerciseStats = useCallback(
+    (exerciseId: number) => {
+      const lastSet = exerciseLastSets.get(exerciseId);
+      return lastSet ? `${lastSet.weight}kg × ${lastSet.reps}` : t('noData');
+    },
+    [exerciseLastSets, t]
+  );
 
   const handleExerciseSelect = (exercise: Exercise) => {
     setSelectedExercise(exercise);
@@ -253,10 +265,7 @@ export default function WorkoutScreen() {
                 <View className="items-end">
                   <Text className="text-xs text-primary-foreground/70">{t('todayVolume')}</Text>
                   <Text className="text-lg font-bold text-primary-foreground">
-                    {todaySetsData
-                      .reduce((acc, set) => acc + set.weight * set.reps, 0)
-                      .toLocaleString()}{' '}
-                    kg
+                    {todayVolume.toLocaleString()} kg
                   </Text>
                 </View>
               )}

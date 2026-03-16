@@ -3,7 +3,6 @@ import { Alert, Image, ScrollView, Share, Text, TouchableOpacity, View } from 'r
 
 import { useRouter } from 'expo-router';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FileText, LogOut, Settings, Shield, Trash2, User } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +12,7 @@ import { useI18n } from '@/components/I18nProvider';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { clearAllData, getAllSetsWithDetails } from '@/lib/database';
+import { formatRelativeDate } from '@/lib/i18n';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -20,23 +20,7 @@ export default function ProfileScreen() {
   const { user, isLoading, signOut, signInWithGoogle, isSigningIn, isGoogleSignInReady } =
     useAuth();
 
-  const formatDateForCSV = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === today.toDateString()) {
-      return t('today');
-    }
-    if (date.toDateString() === yesterday.toDateString()) {
-      return t('yesterday');
-    }
-    return date.toLocaleDateString(locale, {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  const formatDateForCSV = (dateString: string) => formatRelativeDate(dateString, locale, t);
 
   const handleExportData = async () => {
     const sets = await getAllSetsWithDetails();
@@ -92,9 +76,6 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await clearAllData();
-            // Also clear any remaining AsyncStorage caches
-            await AsyncStorage.removeItem('workoutLogs');
-            await AsyncStorage.removeItem('workout_sections');
             Alert.alert(t('clearDataSuccess'));
           } catch (error) {
             Alert.alert('Error', String(error));

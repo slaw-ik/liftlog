@@ -1,14 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import {
-  Alert,
-  Image,
-  Modal,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { useFocusEffect } from '@react-navigation/native';
 import { Check, ChevronRight, Dumbbell, Edit, Plus, Trash2, X } from 'lucide-react-native';
@@ -278,17 +269,6 @@ export default function SectionsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 128, paddingTop: 16 }}>
-        {/* Hero Image */}
-        <View className="mb-6 px-6">
-          <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1591311630200-ffa9120a540f?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8R3ltJTIwd2VpZ2h0cyUyMGVxdWlwbWVudHxlbnwwfHwwfHx8MA%3D%3D',
-            }}
-            className="h-40 w-full rounded-xl"
-            resizeMode="cover"
-          />
-        </View>
-
         {/* Add Section Button */}
         <View className="mb-4 px-6">
           <TouchableOpacity
@@ -341,7 +321,7 @@ export default function SectionsScreen() {
                     </TouchableOpacity>
 
                     <ChevronRight
-                      className={`text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      className={`text-muted-foreground ${isExpanded ? 'rotate-90' : ''}`}
                       size={20}
                     />
                   </View>

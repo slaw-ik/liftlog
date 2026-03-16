@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import * as Google from 'expo-auth-session/providers/google';
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Public sign-in method
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = useCallback(async () => {
     if (!request) {
       Alert.alert(
         'Sign-in not ready',
@@ -114,31 +114,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsSigningIn(false);
       Alert.alert('Error', 'Could not open sign-in. Try again.');
     }
-  };
+  }, [request, promptAsync]);
 
   // Sign out
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
     } catch (error) {
       console.error('Sign-out error:', error);
     }
-  };
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isSigningIn,
-        isGoogleSignInReady: !!request,
-        signInWithGoogle,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const contextValue = useMemo(
+    () => ({
+      user,
+      isLoading,
+      isSigningIn,
+      isGoogleSignInReady: !!request,
+      signInWithGoogle,
+      signOut,
+    }),
+    [user, isLoading, isSigningIn, request, signInWithGoogle, signOut]
   );
+
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 // ============================================================================

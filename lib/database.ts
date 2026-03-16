@@ -490,6 +490,43 @@ export async function getTodaySets(): Promise<SetWithDetails[]> {
   );
 }
 
+/**
+ * Returns the most recent set for each exercise in a single SQL query,
+ * replacing the N+1 loop pattern of calling getSetsByExercise per exercise.
+ */
+export async function getLastSetPerExercise(): Promise<Map<number, SetWithDetails>> {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync<SetWithDetails>(`
+    SELECT
+      s.*,
+      e.name as exercise_name,
+      e.category as exercise_category,
+      e.i18n_key as exercise_i18n_key,
+      w.date as workout_date
+    FROM sets s
+    JOIN exercises e ON s.exercise_id = e.id
+    JOIN workouts w ON s.workout_id = w.id
+    WHERE s.id IN (
+      SELECT MAX(s2.id)
+      FROM sets s2
+      JOIN workouts w2 ON s2.workout_id = w2.id
+      INNER JOIN (
+        SELECT s3.exercise_id, MAX(w3.date) as latest_date
+        FROM sets s3
+        JOIN workouts w3 ON s3.workout_id = w3.id
+        GROUP BY s3.exercise_id
+      ) latest ON s2.exercise_id = latest.exercise_id
+        AND w2.date = latest.latest_date
+      GROUP BY s2.exercise_id
+    )
+  `);
+  const map = new Map<number, SetWithDetails>();
+  for (const row of rows) {
+    map.set(row.exercise_id, row);
+  }
+  return map;
+}
+
 export async function getExerciseMaxWeight(exerciseId: number): Promise<number> {
   const database = await getDatabase();
   const result = await database.getFirstAsync<{ max: number }>(

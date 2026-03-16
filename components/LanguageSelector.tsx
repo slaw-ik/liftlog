@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import { Check, Globe } from 'lucide-react-native';
@@ -54,21 +54,27 @@ function LanguageModalContent({
 
 export function LanguageSelector() {
   const [modalVisible, setModalVisible] = useState(false);
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const languages = getAvailableLanguages();
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) {
+        clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleLanguageChange = async (langCode: string) => {
     await setLocale(langCode);
     // Brief delay so user sees the language change, then close
-    setTimeout(() => {
+    closeTimerRef.current = setTimeout(() => {
       setModalVisible(false);
     }, 500);
   };
 
   const currentLanguage = languages.find((l) => l.code === locale);
-
-  // Compute label fresh on every render, explicitly using locale to ensure re-render updates it
-  const languageLabel = locale ? i18n.t('language') : i18n.t('language');
 
   return (
     <>
@@ -80,7 +86,7 @@ export function LanguageSelector() {
         <View className="flex-row items-center gap-3">
           <Globe className="text-primary" size={20} />
           <View>
-            <Text className="text-sm font-medium text-foreground">{languageLabel}</Text>
+            <Text className="text-sm font-medium text-foreground">{t('language')}</Text>
             <Text className="text-xs text-muted-foreground">{currentLanguage?.nativeName}</Text>
           </View>
         </View>

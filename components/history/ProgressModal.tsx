@@ -6,7 +6,6 @@ import { LineChart as GiftedLineChart } from 'react-native-gifted-charts';
 
 import { useI18n } from '@/components/I18nProvider';
 import { getExerciseDisplayNameForStableId, SetWithDetails } from '@/lib/database';
-import { ProgressMetric } from '@/lib/fitness';
 import { getCategoryDisplayName } from '@/lib/i18n';
 import { useChartColors } from '@/lib/useChartColors';
 
@@ -30,7 +29,6 @@ type Props = {
   selectedExercise: ExerciseProgress | null;
   chartData: ChartDataPoint[];
   reversedSets: SetWithDetails[];
-  progressMetric: ProgressMetric;
   formatDate: (d: string) => string;
   formatTime: (d: string) => string;
 };
