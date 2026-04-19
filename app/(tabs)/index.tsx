@@ -146,8 +146,9 @@ export default function WorkoutScreen() {
   );
 
   const handleExerciseSelect = useCallback(
-    (exercise: Exercise) => {
+    (exercise: Exercise, section: WorkoutSection) => {
       setSelectedExercise(exercise);
+      setSelectedSection(section);
       const lastSet = exerciseLastSets.get(exercise.id);
       if (lastSet) {
         setWeight(lastSet.weight.toString());
@@ -158,8 +159,8 @@ export default function WorkoutScreen() {
   );
 
   const handleExerciseSelectAndClose = useCallback(
-    (exercise: Exercise) => {
-      handleExerciseSelect(exercise);
+    (exercise: Exercise, section: WorkoutSection) => {
+      handleExerciseSelect(exercise, section);
       setShowExerciseModal(false);
     },
     [handleExerciseSelect]

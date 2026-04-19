@@ -13,7 +13,7 @@ type Props = {
   visible: boolean;
   sections: WorkoutSection[];
   getLastExerciseStats: (exerciseId: number) => string;
-  onSelectExercise: (exercise: Exercise) => void;
+  onSelectExercise: (exercise: Exercise, section: WorkoutSection) => void;
   onClose: () => void;
 };
 
@@ -33,14 +33,21 @@ export function ExerciseSelectorModal({
   };
 
   const handleSelectExercise = (exercise: Exercise) => {
+    const section = selectedSection!;
     setSelectedSection(null);
-    onSelectExercise(exercise);
+    onSelectExercise(exercise, section);
   };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <View className="flex-1 justify-end">
-        <TouchableOpacity className="flex-1 bg-black/50" activeOpacity={1} onPress={handleClose} />
+      <View style={{ flex: 1 }}>
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          className="bg-black/50"
+          activeOpacity={1}
+          onPress={handleClose}
+        />
+        <View style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
         <View className="rounded-t-3xl bg-background" style={{ maxHeight: '75%' }}>
           <View className="items-center pb-2 pt-3">
             <View className="h-1 w-10 rounded-full bg-muted" />
@@ -117,6 +124,7 @@ export function ExerciseSelectorModal({
               <Text className="font-medium text-muted-foreground">{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
+        </View>
         </View>
       </View>
     </Modal>
